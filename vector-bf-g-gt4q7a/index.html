@@ -1502,11 +1502,40 @@
       el.innerHTML = '✓ Pedido mínimo atingido.<br>À vista: 5% de desconto no PIX.';
     }
   }
+
+  var minOv = null;
+  function minAlert(){
+    var t = orderTotal();
+    if (!minOv){
+      minOv = document.createElement('div');
+      minOv.className = 'overlay';
+      minOv.innerHTML =
+        '<div class="sheet thanks-sheet" role="alertdialog" aria-labelledby="minTitle">' +
+          '<div class="sheet-handle"></div>' +
+          '<div class="thanks-icon" style="background:#d31c2b"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>' +
+          '<h2 id="minTitle">Pedido mínimo não atingido</h2>' +
+          '<p class="thanks-text">O valor mínimo do pedido é <b>R$ 1.000,00</b>.<br>Seu pedido está em <b id="minCur"></b>.<br>Faltam <b id="minFalta" style="color:#d31c2b;font-size:1.15em"></b> para atingir o valor mínimo exigido.</p>' +
+          '<button class="btn-primary" id="minAdd" type="button">Adicionar mais itens</button>' +
+          '<button class="btn-link" id="minBack" type="button">Voltar ao pedido</button>' +
+        '</div>';
+      document.body.appendChild(minOv);
+      minOv.addEventListener('click', function(e){ if (e.target === minOv) minOv.hidden = true; });
+      minOv.querySelector('#minBack').addEventListener('click', function(){ minOv.hidden = true; });
+      minOv.querySelector('#minAdd').addEventListener('click', function(){
+        minOv.hidden = true; overlay.hidden = true; document.body.style.overflow = '';
+        window.scrollTo({top:0, behavior:'smooth'});
+      });
+    }
+    minOv.querySelector('#minCur').textContent = fmt(t);
+    minOv.querySelector('#minFalta').textContent = fmt(MIN_ORDER - t);
+    minOv.style.zIndex = '95';
+    minOv.hidden = false;
+  }
   var _rsOrig = renderSheet; renderSheet = function(){ _rsOrig.apply(this, arguments); updMin(); };
   var _ucOrig = updateCartBar; updateCartBar = function(){ _ucOrig.apply(this, arguments); updMin(); };
   document.getElementById('sendWhats').addEventListener('click', function(){
     var btn = this;
-    if (orderTotal() < MIN_ORDER){ updMin(); var mn=document.getElementById('minNote'); mn.scrollIntoView({block:'center',behavior:'smooth'}); mn.animate && mn.animate([{transform:'scale(1)'},{transform:'scale(1.04)'},{transform:'scale(1)'}],{duration:400,iterations:2}); return; }
+    if (orderTotal() < MIN_ORDER){ updMin(); minAlert(); return; }
     var p;
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
