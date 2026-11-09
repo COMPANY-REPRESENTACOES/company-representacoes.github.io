@@ -847,6 +847,7 @@
   O iPhone abriu só a pré-visualização do arquivo e o pedido não funciona aqui.<br>
   <a href="https://company-representacoes.github.io/vector-bf-c-h7gwjw/" style="display:inline-block;margin-top:10px;padding:10px 18px;border-radius:999px;background:#fff;color:#d0121b;text-decoration:none;font-weight:800">Toque aqui para abrir o pedido no Safari</a>
 </div>
+<style>.min-line{margin:8px 0 0;background:#d31c2b;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;font-size:13.5px;letter-spacing:.03em;text-align:center;line-height:1.35}.min-line b{color:#ffe14d}.min-note{margin:10px 0 0;border-radius:10px;padding:9px 12px;font-size:13.5px;font-weight:700;line-height:1.4;background:#eaf7ee;color:#11672f;border:1.5px solid #2ea35a}.min-note.warn{background:#fdecee;color:#8f0f1a;border-color:#d31c2b}</style>
 <div class="topbar">
   <div class="brand-row">
     <div class="brand">
@@ -869,6 +870,7 @@
     </div>
   </div>
   <div class="promo-line"><span class="dot"></span> BLACK FRIDAY 03/11 A 30/11/26 NO TOPO · PREÇO FINAL</div>
+  <div class="min-line">PEDIDO MÍNIMO R$ 1.000,00 · À VISTA <b>5% DE DESCONTO NO PIX</b></div>
   <div class="search-row">
     <input id="search" type="text" placeholder="Buscar por código ou nome do produto…" autocomplete="off">
     <button class="filter-btn" id="availBtn" aria-pressed="false" title="Mostrar apenas disponíveis">Todos os itens</button>
@@ -890,6 +892,7 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.29-1.39a9.9 9.9 0 0 0 4.75 1.21h.01c5.46 0 9.9-4.45 9.9-9.91C21.96 6.45 17.5 2 12.04 2Zm5.8 14.13c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.8-.11-.42-.13-.96-.31-1.65-.6-2.9-1.25-4.8-4.17-4.94-4.36-.14-.19-1.18-1.57-1.18-3 0-1.42.75-2.12 1.02-2.41.27-.29.58-.36.78-.36.2 0 .39 0 .56.01.18.01.42-.07.65.5.24.58.82 2 .89 2.15.07.15.12.32.02.51-.09.19-.14.31-.28.48-.14.17-.29.37-.42.5-.14.14-.28.29-.12.57.16.28.71 1.17 1.52 1.9 1.05.94 1.93 1.23 2.21 1.37.28.14.45.12.61-.07.17-.19.71-.83.9-1.11.19-.28.38-.23.63-.14.26.09 1.65.78 1.93.92.28.14.47.21.54.33.07.12.07.68-.17 1.36Z"/></svg>
       <span>Confira os itens e envie o PDF do pedido direto para o representante pelo WhatsApp.</span>
     </div>
+    <div class="min-note" id="minNote"></div>
     <div class="sheet-actions sheet-actions-top">
       <button class="btn-secondary" id="closeCheckout">Voltar</button>
       <button class="btn-primary" id="sendWhats">
@@ -1485,8 +1488,25 @@
     if (e.target === deskOverlay){ deskOverlay.hidden = true; overlay.hidden = false; }
   });
 
+
+  var MIN_ORDER = 1000, PIX_OFF = 0.05;
+  function orderTotal(){ return cartEntries().reduce(function(s,e){ return s+e.qty*e.unit; }, 0); }
+  function updMin(){
+    var el = document.getElementById('minNote'); if (!el) return;
+    var t = orderTotal();
+    if (t < MIN_ORDER){
+      el.className = 'min-note warn';
+      el.innerHTML = 'Pedido mínimo R$ 1.000,00. Faltam <b>' + fmt(MIN_ORDER - t) + '</b> para enviar o pedido.<br>À vista: 5% de desconto no PIX.';
+    } else {
+      el.className = 'min-note';
+      el.innerHTML = '✓ Pedido mínimo atingido.<br>À vista no PIX (5% de desconto): <b>' + fmt(t*(1-PIX_OFF)) + '</b>';
+    }
+  }
+  var _rsOrig = renderSheet; renderSheet = function(){ _rsOrig.apply(this, arguments); updMin(); };
+  var _ucOrig = updateCartBar; updateCartBar = function(){ _ucOrig.apply(this, arguments); updMin(); };
   document.getElementById('sendWhats').addEventListener('click', function(){
     var btn = this;
+    if (orderTotal() < MIN_ORDER){ updMin(); var mn=document.getElementById('minNote'); mn.scrollIntoView({block:'center',behavior:'smooth'}); mn.animate && mn.animate([{transform:'scale(1)'},{transform:'scale(1.04)'},{transform:'scale(1)'}],{duration:400,iterations:2}); return; }
     var p;
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
@@ -1775,6 +1795,8 @@
     doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
     doc.text(W - M - 10, y + 31, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
     doc.text(M, y + 14, 'Preços conforme tabela Vector 02/10/2023', { size: 8, color: MUTED });
+    doc.text(M, y + 26, 'Pedido mínimo R$ 1.000,00 · À vista: 5% de desconto no PIX', { size: 8, bold: true, color: RED });
+    doc.text(M, y + 38, 'Total à vista no PIX: ' + fmt(o.total*0.95), { size: 8.5, bold: true });
     y += 56;
 
     if (obsLines.length){
