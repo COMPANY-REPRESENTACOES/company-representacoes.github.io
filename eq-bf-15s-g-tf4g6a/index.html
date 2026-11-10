@@ -19,7 +19,8 @@
   .bf-tag em{display:block;font-style:normal;color:#ffb4b4;font-weight:700;margin-top:2px;}
   .thumb{background:#fff!important;}
   @media (max-width:700px){ .bf-rows{grid-template-columns:1fr;} }
-  .bf-tag i{display:block;font-style:normal;color:#bbb;margin-top:2px;font-size:10px;}
+  .bf-p{display:flex;justify-content:space-between;gap:4px;color:#ccc;white-space:nowrap;font-size:10px;margin-top:1px;letter-spacing:-.01em;} .bf-p b{font-size:10px;} .bf-p span{overflow:hidden;text-overflow:ellipsis;} .bf-p b{color:#fff;} .bf-p.on{color:#ffd21f;font-weight:700;} .bf-p.on b{color:#ffd21f;}
+  .bf-tag i{display:block;font-style:normal;margin-top:3px;font-weight:700;color:#ffb36b;} .bf-tag i.ok{color:#7ee2a5;}
 
 </style></head><body>
 <meta name="robots" content="noindex,nofollow">
@@ -46,7 +47,8 @@
   .bf-tag em{display:block;font-style:normal;color:#ffb4b4;font-weight:700;margin-top:2px;}
   .thumb{background:#fff!important;}
   @media (max-width:700px){ .bf-rows{grid-template-columns:1fr;} }
-  .bf-tag i{display:block;font-style:normal;color:#bbb;margin-top:2px;font-size:10px;}
+  .bf-p{display:flex;justify-content:space-between;gap:4px;color:#ccc;white-space:nowrap;font-size:10px;margin-top:1px;letter-spacing:-.01em;} .bf-p b{font-size:10px;} .bf-p span{overflow:hidden;text-overflow:ellipsis;} .bf-p b{color:#fff;} .bf-p.on{color:#ffd21f;font-weight:700;} .bf-p.on b{color:#ffd21f;}
+  .bf-tag i{display:block;font-style:normal;margin-top:3px;font-weight:700;color:#ffb36b;} .bf-tag i.ok{color:#7ee2a5;}
 
 </style>
 
@@ -949,7 +951,8 @@
   .bf-tag em{display:block;font-style:normal;color:#ffb4b4;font-weight:700;margin-top:2px;}
   .thumb{background:#fff!important;}
   @media (max-width:700px){ .bf-rows{grid-template-columns:1fr;} }
-  .bf-tag i{display:block;font-style:normal;color:#bbb;margin-top:2px;font-size:10px;}
+  .bf-p{display:flex;justify-content:space-between;gap:4px;color:#ccc;white-space:nowrap;font-size:10px;margin-top:1px;letter-spacing:-.01em;} .bf-p b{font-size:10px;} .bf-p span{overflow:hidden;text-overflow:ellipsis;} .bf-p b{color:#fff;} .bf-p.on{color:#ffd21f;font-weight:700;} .bf-p.on b{color:#ffd21f;}
+  .bf-tag i{display:block;font-style:normal;margin-top:3px;font-weight:700;color:#ffb36b;} .bf-tag i.ok{color:#7ee2a5;}
 
 </style>
 
@@ -1227,7 +1230,7 @@
     );
   }
 
-  function render(){
+  function render(){ bfApplyPrices();
     var q = searchInput.value.trim().toLowerCase();
     var list = ITEMS.filter(function(it){
       if (onlyAvail && !it.avail) return false;
@@ -1432,11 +1435,36 @@
     });
     return out;
   }
+  function bfMinPct(k){ var t = BASKETS[k].tiers[0]; return t[0] <= 1 ? t[1] : 0; }
+  function bfCurPct(it){
+    var k = it.bf; if (!BASKETS[k]) return 0;
+    if (BASKETS[k].kit && bfKits() > 0 && (cart[it.n]||0) > 0) return 30;
+    return Math.max(bfPct(k, bfQty(k)), bfMinPct(k));
+  }
+  function bfApplyPrices(){
+    ITEMS.forEach(function(it){
+      if (!it.bf || !it.avail) return;
+      var p = bfCurPct(it);
+      it.price = Math.round(it.base*(1-p/100)*100)/100;
+      it.orig = p > 0 ? it.base : null;
+    });
+  }
   function bfTag(it){
     var b = BASKETS[it.bf]; if (!b) return '';
-    var mx = Math.max.apply(null, b.tiers.map(function(t){ return t[1]; }).concat(b.kit?[30]:[]));
-    var multi = b.tiers.length>1 || b.kit;
-    return '<div class="bf-tag"><b>BLACK FRIDAY</b><span>'+tiersTxt(it.bf)+'</span>'+(b.note?'<em>'+b.note+'</em>':'')+(multi?'<i>preço abaixo já com o desconto máximo (-'+mx+'%)</i>':'')+'</div>';
+    var p = bfCurPct(it), steps = b.tiers.map(function(t){ return [t[0], t[1]]; });
+    if (b.kit) steps.push(['kit', 30]);
+    var prices = it.avail ? steps.map(function(t){
+      var on = (t[0]==='kit') ? (p===30) : (p===t[1]);
+      var lbl = t[0]==='kit' ? 'kit' : (t[0]===1 ? (b.tiers.length===1 ? 'qq qtd' : '1 un') : t[0]+'+');
+      return '<span class="bf-p'+(on?' on':'')+'"><span>'+lbl+' -'+t[1]+'%</span><b>'+fmt(Math.round(it.base*(1-t[1]/100)*100)/100)+'</b></span>';
+    }).join('') : '';
+    var st = '';
+    if (it.avail){
+      var q = bfQty(it.bf), nx = bfNext(it.bf, q);
+      if (p > 0) st = '<i class="ok">✓ desconto -'+p+'% aplicado no preço</i>';
+      else if (nx) st = '<i>faltam '+pcs(nx[0]-q)+' de '+b.label+' para -'+nx[1]+'%</i>';
+    }
+    return '<div class="bf-tag"><b>BLACK FRIDAY</b>'+prices+(b.note?'<em>'+b.note+'</em>':'')+st+'</div>';
   }
   function bfRow(k){
     var b = BASKETS[k], q = bfQty(k), p = bfPct(k,q), nx = bfNext(k,q), msg, cls = '';
