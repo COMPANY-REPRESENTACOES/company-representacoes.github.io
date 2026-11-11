@@ -1,5 +1,5 @@
 /* Company Vendas — service worker (funcionamento offline) */
-var VER = 'cv-shell-v2';
+var VER = 'cv-shell-v3';
 var SHELL = ['./', 'index.html', 'app.js', 'pdflib.js', 'config.js', 'manifest.webmanifest', 'company.png', 'icon-192.png', 'icon-512.png', 'catalogo.json'];
 
 self.addEventListener('install', function(e){
