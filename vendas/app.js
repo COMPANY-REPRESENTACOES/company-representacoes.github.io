@@ -101,6 +101,30 @@ function acharItem(gid, cod){
   for (var i=0;i<g.marcas.length;i++){ var it = g.marcas[i].itens.find(function(x){ return x.cod === cod; }); if (it) return { it: it, marca: g.marcas[i] }; }
   return null;
 }
+/* preço de tabela + desconto aplicado (ex.: 12+10+10%) */
+var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]] };
+function numBR(x){ return String(Math.round(x*10)/10).replace('.', ','); }
+function precoInfo(p, it){
+  var a = acharItem(p.grupo, it.cod), pid = politicaId(p.grupo, p.politica), unit = r2(it.unit), tab = null, d = 0;
+  if (a && pid){
+    var o = a.it.o && a.it.o[pid], cp = a.it.p[pid];
+    if (p.grupo === 'equipo'){ d = /^18/.test(pid) ? 18 : 15; var base = o || cp; if (base != null) tab = base / (1 - d/100); }
+    else if (o) tab = o;
+  }
+  if (!tab || !(unit >= 0)) return { tab: null, desc: '' };
+  tab = r2(tab);
+  var ratio = unit / tab, desc = '';
+  if (Math.abs(ratio - 1) < 0.0006) desc = 'sem desconto';
+  else if (p.grupo === 'equipo'){
+    var extra = (1 - ratio / (1 - d/100)) * 100;
+    desc = Math.abs(extra) < 0.3 ? d + '%' : extra > 0 ? d + '+' + numBR(extra) + '%' : numBR((1 - ratio)*100) + '%';
+  } else {
+    var ch = (CADEIAS[p.grupo] || []).find(function(c){ return Math.abs(c.reduce(function(m, x){ return m * (1 - x/100); }, 1) - ratio) < 0.0015; });
+    desc = ch ? ch.join('+') + '%' : numBR((1 - ratio)*100) + '%';
+  }
+  if (a && a.it.tag === 'Oferta' && desc.indexOf('+') < 0) desc = 'Oferta ' + desc;
+  return { tab: tab, desc: desc };
+}
 function imgDe(gid, cod){ var a = acharItem(gid, cod); return a && a.it.img ? a.it.img : 'company.png'; }
 
 /* ---------- sincronização ---------- */
@@ -310,6 +334,7 @@ function linhaItem(p, it, i, travado){
       '<div class="qty' + (mudouQ ? ' changed' : '') + '"><button type="button" data-dec>−</button><input data-q inputmode="numeric" value="' + it.qty + '"><button type="button" data-inc>+</button></div>' +
       '<input class="price-in' + (mudouP ? ' changed' : '') + '" data-u inputmode="decimal" value="' + String(r2(it.unit).toFixed(2)).replace('.', ',') + '" title="Preço unitário">') +
       '<span class="lt">' + fmt(r2(it.qty * it.unit)) + '</span>' + (travado ? '' : '<button class="rm" data-rm title="Remover">✕</button>') + '</div>' +
+    (function(){ var pi = precoInfo(p, it); return pi.tab ? '<div class="muted" style="font-size:12px;margin-top:4px">Tabela ' + fmt(pi.tab) + ' · desconto ' + esc(pi.desc) + ' · final ' + fmt(it.unit) + '</div>' : ''; })() +
     (mudouP || mudouQ ? '<div class="muted" style="font-size:12px;margin-top:4px">Cliente pediu: ' + orig.qty + ' × ' + fmt(orig.unit) + '</div>' : '') +
     '</div></div>';
 }
@@ -559,13 +584,13 @@ function gerarEspelho(p){
   field(fx, fy, 'Transportadora', c.carrier, colW - 10);
   field(fx + colW, fy, 'Representante', 'Company Representações · ' + (CFG.vendedores[p.vendedor_codigo] || '') + ' ' + (CFG.fones[p.vendedor_codigo] || ''), 2*colW - 10);
   y += boxH + 16;
-  var cols = [{t:'#',w:22,a:'center'},{t:'CÓDIGO',w:84,a:'left'},{t:'DESCRIÇÃO',w:0,a:'left'},{t:'QTD',w:36,a:'right'},{t:'VLR. UNIT.',w:66,a:'right'},{t:'TOTAL',w:72,a:'right'}];
+  var cols = [{t:'#',w:18,a:'center'},{t:'CÓDIGO',w:70,a:'left'},{t:'DESCRIÇÃO',w:0,a:'left'},{t:'QTD',w:28,a:'right'},{t:'PREÇO TABELA',w:62,a:'right'},{t:'DESCONTO',w:56,a:'center'},{t:'PREÇO FINAL',w:60,a:'right'},{t:'TOTAL',w:64,a:'right'}];
   cols[2].w = CW - cols.reduce(function(s,x){ return s + x.w; }, 0);
   var PAD = 5;
   function colX(i){ var x = M; for (var k=0;k<i;k++) x += cols[k].w; return x; }
   function head(){ doc.rect(M, y, CW, 18, RED); cols.forEach(function(cc,i){ var x = cc.a==='right' ? colX(i)+cc.w-PAD : cc.a==='center' ? colX(i)+cc.w/2 : colX(i)+PAD; doc.text(x, y+12, cc.t, { size: 7.5, bold: true, color: '#ffffff', align: cc.a }); }); y += 18; }
   head();
-  var tq = 0;
+  var tq = 0, somaTab = 0;
   p.itens.forEach(function(e, idx){
     var desc = e.desc + (e.label ? ' — ' + e.label : '') + (e.marca ? ' (' + e.marca + ')' : '');
     var lines = pdfWrap(desc, false, 8.5, cols[2].w - 2*PAD), rowH = Math.max(18, lines.length*10.5 + 8);
@@ -576,8 +601,11 @@ function gerarEspelho(p){
     doc.text(colX(1)+PAD, b, e.cod, { size: 8.5, bold: true });
     lines.forEach(function(l, li){ doc.text(colX(2)+PAD, b + li*10.5, l, { size: 8.5 }); });
     doc.text(colX(3)+cols[3].w-PAD, b, String(e.qty), { size: 8.5, bold: true, align: 'right' });
-    doc.text(colX(4)+cols[4].w-PAD, b, fmt(e.unit), { size: 8.5, align: 'right' });
-    doc.text(colX(5)+cols[5].w-PAD, b, fmt(r2(e.qty*e.unit)), { size: 8.5, bold: true, align: 'right' });
+    var pi = precoInfo(p, e); if (pi.tab){ somaTab += pi.tab*e.qty; } else { somaTab += e.unit*e.qty; }
+    doc.text(colX(4)+cols[4].w-PAD, b, pi.tab ? fmt(pi.tab) : '—', { size: 8, color: MUTED, align: 'right' });
+    var dl = pdfWrap(pi.desc || '—', true, 7.5, cols[5].w - 4); dl.forEach(function(l, li){ doc.text(colX(5)+cols[5].w/2, b + li*9, l, { size: 7.5, bold: true, color: RED, align: 'center' }); });
+    doc.text(colX(6)+cols[6].w-PAD, b, fmt(e.unit), { size: 8.5, bold: true, align: 'right' });
+    doc.text(colX(7)+cols[7].w-PAD, b, fmt(r2(e.qty*e.unit)), { size: 8.5, bold: true, align: 'right' });
     y += rowH; doc.line(M, y, M+CW, y, LINE, 0.5); tq += e.qty;
   });
   var obs = p.obs ? pdfWrap(p.obs, false, 9, CW - 20) : [];
@@ -588,7 +616,7 @@ function gerarEspelho(p){
   doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
   doc.text(W - M - 10, y + 31, fmt(tot), { size: 14, bold: true, color: RED, align: 'right' });
   doc.text(M, y + 14, 'Prazo de pagamento: ' + (p.prazo || '—'), { size: 8.5, bold: true, color: RED });
-  doc.text(M, y + 26, 'Preços conforme política ' + politicaNome(p.grupo, p.politica), { size: 8, color: MUTED });
+  doc.text(M, y + 26, 'Política ' + politicaNome(p.grupo, p.politica) + ' · Total em preço de tabela ' + fmt(somaTab) + ' · Descontos ' + fmt(Math.max(0, somaTab - tot)), { size: 8, color: MUTED });
   y += 56;
   if (obs.length){ doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED }); y += 6; var oh = obs.length*12 + 12; doc.rect(M, y, CW, oh, null, LINE, 0.8); obs.forEach(function(l,i){ doc.text(M+10, y+15+i*12, l, { size: 9 }); }); y += oh + 16; }
   y = Math.max(y + 30, Math.min(BOTTOM - 20, y + 40)); var sw = (CW - 40)/2;
