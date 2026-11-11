@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#12355b">
+<meta name="theme-color" content="#1c1c1e">
 <title>Company Vendas</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -14,20 +14,20 @@
 <style>
 :root{
   --bg:#f3f4f7; --surface:#fff; --surface-2:#f8f9fb; --text:#16181d; --muted:#667085; --border:#e3e6ec;
-  --accent:#12355b; --accent-2:#1d4f86; --accent-ink:#fff; --gold:#b8913a;
+  --accent:#1c1c1e; --accent-2:#3a3a3e; --accent-ink:#f2c14e; --gold:#d99a2b; --gold-2:#f2c14e; --gold-dark:#a8711a; --silver:#c8c8cc;
   --ok:#1f8a4c; --warn:#a15c07; --bad:#c62828; --chip:#eef1f5;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 14px rgba(16,24,40,.06);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#0f1217; --surface:#171b22; --surface-2:#1c212a; --text:#eef0f4; --muted:#9aa3b2; --border:#2a313c;
-    --accent:#5b9be0; --accent-2:#7cb2ea; --accent-ink:#0f1217; --gold:#d6b25e; --chip:#222833;
+    --accent:#f2c14e; --accent-2:#d99a2b; --accent-ink:#1c1c1e; --gold:#d99a2b; --gold-2:#f2c14e; --gold-dark:#f2c14e; --silver:#8e8e93; --chip:#26262a;
     --ok:#4ac47f; --warn:#e6a23c; --bad:#ef6b6b; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35);
   }
 }
 :root[data-theme="dark"]{
   --bg:#0f1217; --surface:#171b22; --surface-2:#1c212a; --text:#eef0f4; --muted:#9aa3b2; --border:#2a313c;
-  --accent:#5b9be0; --accent-2:#7cb2ea; --accent-ink:#0f1217; --gold:#d6b25e; --chip:#222833;
+  --accent:#f2c14e; --accent-2:#d99a2b; --accent-ink:#1c1c1e; --gold:#d99a2b; --gold-2:#f2c14e; --gold-dark:#f2c14e; --silver:#8e8e93; --chip:#26262a;
   --ok:#4ac47f; --warn:#e6a23c; --bad:#ef6b6b;
 }
 *{box-sizing:border-box}
@@ -131,6 +131,26 @@ table.tb td.r,table.tb th.r{text-align:right}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#16181d;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:80;max-width:90vw;text-align:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
 .kv span:nth-child(odd){color:var(--muted)}
+
+/* cores da marca Company: grafite, dourado e prata */
+a.btn{color:var(--text)}a.btn.pri{color:#1c1c1e}
+header.top{background:#1c1c1e;border-bottom:3px solid var(--gold);color:#fff}
+.top-row img{background:transparent;padding:0;height:40px}
+.top-title{color:#fff}.top-title small{color:#c8c8cc}
+.sync{background:#2a2a2e;border-color:#3a3a3e;color:#fff}
+nav.tabs a{color:#b9b9be}
+nav.tabs a.on{color:#f2c14e;border-color:#f2c14e}
+.btn.pri{background:linear-gradient(180deg,#f2c14e,#d99a2b);border-color:#c08420;color:#1c1c1e}
+.btn.pri:hover{filter:brightness(1.05)}
+.chip[aria-pressed="true"]{background:#1c1c1e;border-color:#1c1c1e;color:#f2c14e}
+input.in:focus,select.in:focus,textarea.in:focus{border-color:var(--gold)}
+.qty input:focus,.price-in:focus{outline:2px solid var(--gold)}
+.login{border-top:4px solid var(--gold)}
+.login img{background:transparent}
+.toast{background:#1c1c1e;color:#fff;border:1px solid var(--gold)}
+.note.info{background:#fbf1d9;color:#6b4a0c}
+.tag[style*="var(--accent)"]{background:#1c1c1e!important;color:#f2c14e}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chip[aria-pressed="true"]{background:#f2c14e;border-color:#f2c14e;color:#1c1c1e}:root:not([data-theme="light"]) .note.info{background:#3a2f16;color:#f2d79a}}
 </style>
 </head>
 <body>

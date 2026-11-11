@@ -532,7 +532,7 @@ function baixarFotos(){
 /* ----- PDF espelho ----- */
 function gerarEspelho(p){
   var tot = totalItens(p.itens);
-  var RED = '#12355b', DARK = '#1b1b1d', MUTED = '#6c6c70', LINE = '#dcd9d3', SOFT = '#f6f5f2';
+  var RED = '#b8821e', DARK = '#1b1b1d', MUTED = '#6c6c70', LINE = '#dcd9d3', SOFT = '#f6f5f2';
   var doc = new PdfDoc(), M = 36, W = doc.W, CW = W - 2*M, BOTTOM = doc.H - 58, d = new Date();
   var dateStr = p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear()+' às '+p2(d.getHours())+':'+p2(d.getMinutes());
   var comp = logoToJpeg(document.getElementById('compLogo'), 500);
