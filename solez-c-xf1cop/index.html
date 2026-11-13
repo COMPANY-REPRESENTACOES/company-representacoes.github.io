@@ -1062,7 +1062,7 @@
     </div>
     <div class="pd-body">
       <div class="unavail-ribbon" id="pdRibbon" hidden>Indisponível</div>
-      <span class="promo-tag" id="pdPromo" hidden>BLACK FRIDAY<small>-7% EXTRA NO PREÇO BASE</small></span>
+      <span class="promo-tag" id="pdPromo" hidden>BLACK FRIDAY<small>7% EXTRA APLICADO</small></span>
       <div class="pd-badges">
         <span class="item-code" id="pdCode"></span>
         <span class="unavail-badge pd-unavail-badge" id="pdUnavailBadge" hidden>Indisponível</span>
@@ -1216,7 +1216,7 @@
     return html;
   }
 
-  var PROMO_TAG='<span class="promo-tag">BLACK FRIDAY<small>-7% EXTRA NO PREÇO BASE</small></span>';
+  var PROMO_TAG='<span class="promo-tag">BLACK FRIDAY<small>7% EXTRA APLICADO</small></span>';
   function itemCardHTML(it){
     var qty = cart[it.n] || 0;
     var off = pctOff(it.orig, it.price);
