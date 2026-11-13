@@ -195,6 +195,16 @@
     border-radius:6px;
   }
 
+  .bf-line{margin-top:6px;display:inline-block;background:#111;color:#fff;border-radius:6px;padding:4px 10px;font-size:11.5px;font-weight:600;line-height:1.35;}
+  .bf-line b{color:#ffd400;letter-spacing:.06em;margin-right:4px;}
+  .promo-tag{background:#111 !important;}
+  .promo-tag small{color:#ffd400;}
+  .card.promo{border:2px solid #111 !important;}
+  @media (prefers-color-scheme: dark){ .card.promo{border-color:#ffd400 !important;} .promo-tag{box-shadow:0 0 0 1px #ffd400;} }
+  .cat-btn.cat-promo{background:#111 !important;border-color:#111 !important;color:#ffd400 !important;}
+  .cat-btn.cat-promo .ct{color:#fff !important;}
+  .cat-btn.cat-promo[aria-pressed="true"]{background:#ffd400 !important;border-color:#111 !important;color:#111 !important;}
+  .cat-btn.cat-promo[aria-pressed="true"] .ct{color:#111 !important;}
   .promo-line{
     margin-top:10px;
     display:flex;
@@ -915,6 +925,7 @@
       <div>
         <h1>PEDIDO EXPRESS COMPANY ( SOLEZ )</h1>
         <div class="sub">Tabela Agosto 2026 · Cordas e acessórios</div>
+        <div class="bf-line"><b>BLACK FRIDAY</b> -7% EXTRA em itens selecionados, já no preço base · os descontos de valor de pedido e de prazo continuam valendo</div>
       </div>
     </div>
     <div class="cartbar" id="cartbar">
@@ -1051,7 +1062,7 @@
     </div>
     <div class="pd-body">
       <div class="unavail-ribbon" id="pdRibbon" hidden>Indisponível</div>
-      <span class="promo-tag" id="pdPromo" hidden>Oferta do mês</span>
+      <span class="promo-tag" id="pdPromo" hidden>BLACK FRIDAY<small>-7% EXTRA NO PREÇO BASE</small></span>
       <div class="pd-badges">
         <span class="item-code" id="pdCode"></span>
         <span class="unavail-badge pd-unavail-badge" id="pdUnavailBadge" hidden>Indisponível</span>
@@ -1073,6 +1084,13 @@
 (function(){
   "use strict";
   var ITEMS = JSON.parse(document.getElementById('catalog-data').textContent);
+  /* ---------- BLACK FRIDAY: -7% direto no preço base (antes dos descontos de valor de pedido e de prazo) ---------- */
+  var BF_PCT = 7;
+  var BF_CODES = ['SLAPB10','SLAPB11','SLAPB12','SLPAB13','SLATB09','SLATB10','SLATB11','SLATB12','GFP3','GFP4'];
+  ITEMS.forEach(function(it){
+    if (BF_CODES.indexOf(it.cod) > -1){ it.promo = true; it.tabFull = it.tab; it.tab = Math.round(it.tab * (1 - BF_PCT/100) * 100) / 100; }
+  });
+  ITEMS = ITEMS.map(function(it,i){ return [it,i]; }).sort(function(a,b){ return ((b[0].promo?1:0)-(a[0].promo?1:0)) || (a[1]-b[1]); }).map(function(x){ return x[0]; });
   var REP_PHONE = "5565999022436"; // WhatsApp do representante (Company Representações)
 
   var cart = {}; // n -> qty (plain items) or {qty, unit, label} (tiered/batch items)
@@ -1093,8 +1111,9 @@
   function nextTier(g){ for (var i=0;i<POL.tiers.length;i++){ if (g <= POL.tiers[i][0]) return POL.tiers[i]; } return null; }
   function curBase(){ var g = grossTotal(); return g > POL.tiers[1][0] ? tierFor(g)[1] : POL.tiers[0][1]; }
   function netUnit(tab){ return Math.round(tab * (1 - curBase()/100) * (1 - termPct()/100) * 100) / 100; }
-  function applyPrices(){ ITEMS.forEach(function(it){ it.orig = it.tab; it.price = netUnit(it.tab); }); }
+  function applyPrices(){ ITEMS.forEach(function(it){ it.orig = it.tabFull || it.tab; it.price = netUnit(it.tab); }); }
   function termLabel(){ return termIdx < 0 ? 'a definir (sem desconto de prazo)' : POL.terms[termIdx][0] + ' (' + termPct() + '%)'; }
+  function cartHasBF(){ return Object.keys(cart).some(function(k){ var it = ITEMS.find(function(i){ return i.n === +k; }); return it && it.promo; }); }
   function policyNumbers(){
     var g = grossTotal(), b = curBase(), t = termPct();
     var afterBase = Math.round(g * (1 - b/100) * 100) / 100;
@@ -1126,7 +1145,7 @@
     var bd = document.getElementById('breakdown');
     if (bd){
       bd.innerHTML =
-        '<div class="bd-row"><span>Pedido bruto (preço de tabela)</span><span>'+fmt(p.gross)+'</span></div>'+
+        '<div class="bd-row"><span>Pedido bruto (preço '+(cartHasBF()?'base, já com Black Friday -7%':'de tabela')+')</span><span>'+fmt(p.gross)+'</span></div>'+
         '<div class="bd-row neg"><span>DESC VALOR DE PEDIDO '+p.base+'% sobre a tabela</span><span>- '+fmt(p.baseOff)+'</span></div>'+
         '<div class="bd-row neg"><span>DESC PRAZO DE PG '+termLabel()+'</span><span>- '+fmt(p.termOff)+'</span></div>'+
         (ok ? '' : (p.gross > 0 ? '<div class="bd-hint">Faltam '+fmt(p.missing)+' em pedido bruto para o desconto de '+p.next[1]+'%.</div>' : ''));
@@ -1197,7 +1216,7 @@
     return html;
   }
 
-  var PROMO_TAG='<span class="promo-tag">Oferta do mês</span>';
+  var PROMO_TAG='<span class="promo-tag">BLACK FRIDAY<small>-7% EXTRA NO PREÇO BASE</small></span>';
   function itemCardHTML(it){
     var qty = cart[it.n] || 0;
     var off = pctOff(it.orig, it.price);
@@ -1367,7 +1386,7 @@
   var catRow = document.getElementById('catRow');
   function countCat(c){ return ITEMS.filter(function(i){ return c==='__promo' ? i.promo : (c ? i.cat===c : true); }).length; }
   function renderCats(){
-    var opts = [['','Todos'],['__promo','Oferta do mês']].concat(CATS.map(function(c){ return [c,c]; }));
+    var opts = [['','Todos'],['__promo','BLACK FRIDAY']].concat(CATS.map(function(c){ return [c,c]; }));
     catRow.innerHTML = opts.filter(function(o){ return countCat(o[0])>0; }).map(function(o){
       return '<button type="button" class="cat-btn'+(o[0]==='__promo'?' cat-promo':'')+'" data-cat="'+o[0]+'" aria-pressed="'+(activeCat===o[0])+'">'+o[1]+' <span class="ct">'+countCat(o[0])+'</span></button>';
     }).join('');
@@ -1462,7 +1481,7 @@
           '<img src="'+e.it.img+'" alt="">'+
           '<div class="cl-info">'+
             '<div class="cl-code">'+e.it.cod+'</div>'+
-            '<div class="cl-desc">'+e.it.desc+(e.label ? ' <span style="color:var(--muted);font-weight:600;">· '+e.label+'</span>' : '')+'</div>'+
+            '<div class="cl-desc">'+e.it.desc+(e.it.promo ? ' <b style="color:#111;background:#ffd400;border-radius:4px;padding:0 4px;font-size:11px;">BLACK FRIDAY -7%</b>' : '')+(e.label ? ' <span style="color:var(--muted);font-weight:600;">· '+e.label+'</span>' : '')+'</div>'+
             '<div class="cl-qty">'+e.qty+' × '+fmt(e.unit)+'</div>'+
           '</div>'+
           '<div class="cl-total">'+fmt(lineTotal)+'</div>'+
@@ -1514,7 +1533,7 @@
     lines.push('Representante: Company Representações · (65) 99902-2436');
     lines.push('');
     entries.forEach(function(e){
-      lines.push('• ' + e.it.cod + ' - ' + e.it.desc + (e.label ? ' (' + e.label + ')' : ''));
+      lines.push('• ' + e.it.cod + ' - ' + e.it.desc + (e.it.promo ? ' [BLACK FRIDAY -7%]' : '') + (e.label ? ' (' + e.label + ')' : ''));
       lines.push('   Qtd: ' + e.qty + ' x ' + fmt(e.unit) + ' = ' + fmt(e.qty*e.unit));
     });
     lines.push('');
@@ -1917,7 +1936,7 @@
     drawHeader();
     var totalQty = 0;
     o.entries.forEach(function(e, idx){
-      var desc = e.it.desc + (e.label ? ' — ' + e.label : '');
+      var desc = e.it.desc + (e.it.promo ? ' · BLACK FRIDAY -7%' : '') + (e.label ? ' — ' + e.label : '');
       var lines = pdfWrap(desc, false, 8.5, cols[2].w - 2*PAD);
       var rowH = Math.max(18, lines.length * 10.5 + 8);
       if (y + rowH > BOTTOM) newPage();
@@ -1945,7 +1964,7 @@
     doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
     doc.text(W - M - 10, y + 31, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
     var pn = policyNumbers();
-    doc.text(M, y + 10, 'Total em preço de tabela (Agosto 2026): ' + fmt(pn.gross), { size: 8, color: MUTED });
+    doc.text(M, y + 10, (cartHasBF() ? 'Total em preço base (tabela Agosto 2026, já com Black Friday -7%): ' : 'Total em preço de tabela (Agosto 2026): ') + fmt(pn.gross), { size: 8, color: MUTED });
     doc.text(M, y + 22, 'Desconto ' + pn.base + '% sobre a tabela: - ' + fmt(pn.baseOff), { size: 8, color: MUTED });
     doc.text(M, y + 34, 'Prazo ' + termLabel() + ': - ' + fmt(pn.termOff), { size: 8, bold: true, color: DARK });
     y += 56;
