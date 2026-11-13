@@ -1540,19 +1540,72 @@
     };
   }
 
+  // descobre já na abertura se o link permite salvar arquivos
+  var dlNs = null, dlReady = false;
+  if (window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('downloads').then(function(d){ dlNs = d; dlReady = true; }, function(){ dlNs = null; dlReady = true; });
+  }
+  // plano B (iPhone sem login, navegador do WhatsApp): botões para compartilhar ou abrir o PDF
+  var pdfFbOv = null, pdfFbUrl = null, pdfFbP = null;
+  function pdfFallback(p){
+    pdfFbP = p;
+    if (pdfFbUrl) { try { URL.revokeObjectURL(pdfFbUrl); } catch(e){} }
+    pdfFbUrl = URL.createObjectURL(new Blob([p.bytes], { type: 'application/pdf' }));
+    if (!pdfFbOv){
+      pdfFbOv = document.createElement('div');
+      pdfFbOv.className = 'overlay';
+      pdfFbOv.innerHTML =
+        '<div class="sheet thanks-sheet">' +
+          '<div class="sheet-handle"></div>' +
+          '<h2>PDF do pedido pronto</h2>' +
+          '<p class="thanks-text">Toque em <b>Compartilhar / salvar PDF</b> e escolha <b>WhatsApp</b> para enviar ao representante, ou <b>Salvar em Arquivos</b> para guardar uma cópia.</p>' +
+          '<button class="btn-primary wa-open" id="pfShare" type="button" style="width:100%">Compartilhar / salvar PDF</button>' +
+          '<a class="btn-save" id="pfOpen" target="_blank" rel="noopener" style="margin-top:10px;text-decoration:none">Abrir PDF em nova aba</a>' +
+          '<button class="btn-link" id="pfBack" type="button">Voltar ao pedido</button>' +
+        '</div>';
+      document.body.appendChild(pdfFbOv);
+      pdfFbOv.addEventListener('click', function(e){ if (e.target === pdfFbOv) pdfFbOv.hidden = true; });
+      pdfFbOv.querySelector('#pfBack').addEventListener('click', function(){ pdfFbOv.hidden = true; });
+      pdfFbOv.querySelector('#pfShare').addEventListener('click', function(){
+        var q = pdfFbP; if (!q) return;
+        var file = null;
+        try { file = new File([q.bytes], q.filename, { type: 'application/pdf' }); } catch(e){}
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })){
+          navigator.share({ files: [file], title: 'Pedido ' + q.orderNo }).then(function(){
+            pdfFbOv.hidden = true;
+          }, function(err){
+            if (err && err.name === 'AbortError') return;
+            window.open(pdfFbUrl, '_blank');
+          });
+        } else {
+          window.open(pdfFbUrl, '_blank');
+        }
+      });
+    }
+    pdfFbOv.querySelector('#pfOpen').href = pdfFbUrl;
+    pdfFbOv.querySelector('#pfShare').hidden = !navigator.canShare;
+    pdfFbOv.style.zIndex = '90';
+    pdfFbOv.hidden = false;
+  }
   var lastPdf = null;
-  // Salva o PDF no aparelho. Resolve true se foi salvo, false se o cliente recusou.
   function savePdf(p){
     function blobSave(){ downloadViaBlob(p.filename, p.bytes, 'application/pdf'); return true; }
+    function viaCap(d){
+      return d.save({ filename: p.filename, data: new Blob([p.bytes], { type: 'application/pdf' }) })
+        .then(function(){ return true; }, function(err){
+          if (err && (err.code === 'declined' || err.code === 'rate_limited')) return false;
+          pdfFallback(p); return true;
+        });
+    }
+    if (dlReady){
+      if (dlNs) return viaCap(dlNs);
+      if (window.claude && typeof window.claude.use === 'function'){ pdfFallback(p); return Promise.resolve(true); }
+    }
     if (window.claude && typeof window.claude.use === 'function'){
-      return window.claude.use('downloads').then(function(downloads){
-        if (!downloads) return blobSave();
-        return downloads.save({ filename: p.filename, data: new Blob([p.bytes], { type: 'application/pdf' }) })
-          .then(function(){ return true; }, function(err){
-            if (err && (err.code === 'declined' || err.code === 'rate_limited')) return false;
-            return blobSave();
-          });
-      }, blobSave);
+      return window.claude.use('downloads').then(function(d){
+        if (d) return viaCap(d);
+        pdfFallback(p); return true;
+      }, function(){ pdfFallback(p); return true; });
     }
     return Promise.resolve(blobSave());
   }
@@ -2160,8 +2213,21 @@
     var now = new Date(); function p2(n){ return String(n).padStart(2,'0'); }
     var filename = 'pedido-dreamer-salvo-' + name + '-' + p2(now.getDate()) + p2(now.getMonth()+1) + '-' + p2(now.getHours()) + p2(now.getMinutes()) + '.json';
     var json = JSON.stringify(d);
-    var msg = 'Pedido salvo! Para continuar, abra esta página e toque em "Abrir pedido salvo".';
+    var msg = 'Pedido salvo na pasta Downloads! Para continuar, abra esta página e toque em "Abrir pedido salvo".';
     function blobSave(){ downloadViaBlob(filename, json, 'application/json'); toast(msg); }
+    if (isMobileDevice() && navigator.canShare && !(window.claude && typeof window.claude.use === 'function')){
+      var jf = null;
+      try { jf = new File([json], filename, { type: 'application/json' }); } catch(e){ jf = null; }
+      if (jf && navigator.canShare({ files: [jf] })){
+        navigator.share({ files: [jf], title: 'Pedido salvo' }).then(function(){
+          toast('Pedido salvo! Para continuar, abra esta página, toque em "Abrir pedido salvo" e escolha o arquivo.');
+        }, function(err){
+          if (err && err.name === 'AbortError') return;
+          blobSave();
+        });
+        return;
+      }
+    }
     if (window.claude && typeof window.claude.use === 'function'){
       window.claude.use('downloads').then(function(downloads){
         if (!downloads) return blobSave();
