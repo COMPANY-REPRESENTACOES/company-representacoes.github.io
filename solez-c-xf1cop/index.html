@@ -79,15 +79,17 @@
   .thumb img,.pd-image-wrap img{object-fit:contain!important;}
   .cart-line img{background:#fff!important;object-fit:contain!important;}
   .policy{margin-top:10px;display:flex;flex-direction:column;gap:8px;}
-  .term-hint{flex-basis:100%;display:flex;align-items:center;gap:6px;color:#d31c2b;font-weight:800;font-size:12px;letter-spacing:.02em;line-height:1.25;animation:thBlink 1s ease-in-out infinite;}
+  .term-hint{position:absolute;top:0;left:0;right:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2px;color:#d31c2b;font-weight:800;font-size:12px;letter-spacing:.02em;line-height:1.25;animation:thBlink 1s ease-in-out infinite;}
   .term-hint[hidden]{display:none;}
-  .term-hint .th-arrow{font-size:16px;display:inline-block;animation:thBounce .8s ease-in-out infinite;}
+  .term-hint .th-arrow{font-size:24px;line-height:1;display:inline-block;animation:thBounce .8s ease-in-out infinite;}
   @keyframes thBlink{0%,100%{opacity:1}50%{opacity:.25}}
   @keyframes thBounce{0%,100%{transform:translateY(-2px)}50%{transform:translateY(3px)}}
   .tm-pick{color:#d31c2b;text-transform:uppercase;}
   .term-row.term-alert{border-radius:12px;outline:2px solid #d31c2b;outline-offset:4px;animation:deskPulse 1s ease-in-out 3;}
   @media (prefers-reduced-motion:reduce){.term-hint,.term-hint .th-arrow{animation:none;}}
-  .term-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+  .term-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:fit-content;max-width:100%;align-self:flex-start;position:relative;}
+  .term-row:has(.term-hint:not([hidden])){padding-top:44px;}
+  @media (max-width:560px){.term-row:has(.term-hint:not([hidden])){padding-top:58px;}}
   .term-row .term-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:2px;}
   .term-btn{border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:999px;padding:6px 11px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1.1;}
   .term-btn b{font-variant-numeric:tabular-nums;color:var(--accent-dark);margin-left:3px;}
@@ -1104,7 +1106,7 @@
   }
   function renderTerms(){
     document.querySelectorAll('[data-terms]').forEach(function(row){
-      row.innerHTML = '<span class="term-hint" data-termhint'+(termIdx<0?'':' hidden')+'><span class="th-arrow">⬇</span> ESCOLHA O PRAZO PARA O DESC DE PRAZO DE PAGAMENTO SER APLICADO</span><span class="term-label">Prazo</span>' + POL.terms.map(function(t,i){
+      row.innerHTML = '<span class="term-hint" data-termhint'+(termIdx<0?'':' hidden')+'><span class="th-text">ESCOLHA O PRAZO PARA O DESC DE PRAZO DE PAGAMENTO SER APLICADO</span><span class="th-arrow">⬇</span></span><span class="term-label">Prazo</span>' + POL.terms.map(function(t,i){
         return '<button type="button" class="term-btn" data-term="'+i+'" aria-pressed="'+(i===termIdx)+'">'+t[0]+'<b>-'+t[1]+'%</b></button>';
       }).join('');
     });
