@@ -131,6 +131,17 @@ table.tb td.r,table.tb th.r{text-align:right}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#16181d;color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;z-index:80;max-width:90vw;text-align:center}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
 .kv span:nth-child(odd){color:var(--muted)}
+/* cadastro de cliente */
+.cform h2.sec{font-size:16px;margin:6px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--gold);display:inline-block}
+.cform h2.sec:not(:first-child){margin-top:22px}
+.fr{display:grid;grid-template-columns:190px 1fr;gap:4px 14px;align-items:center;margin:8px 0}
+.fr label.lb{margin:0;font-size:14px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)}
+.fr .req{color:var(--bad)}
+.fv .row.nw{flex-wrap:nowrap}
+.cform .w-s{max-width:190px}.cform .w-m{max-width:280px}.cform .w-l{max-width:380px}
+.lnk{border:0;background:transparent;color:#2f6fd6;font-weight:600;font-size:13px;padding:4px 2px;white-space:nowrap}
+.lnk.big{font-size:15px}
+@media (max-width:600px){.fr{grid-template-columns:1fr;gap:2px}.fv .row.nw{flex-wrap:wrap}.cform .w-s,.cform .w-m,.cform .w-l{max-width:none}}
 
 /* cores da marca Company: grafite, dourado e prata */
 a.btn{color:var(--text)}a.btn.pri{color:#1c1c1e}
