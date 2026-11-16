@@ -524,16 +524,65 @@ function telaNovo(arg){
 }
 
 /* ----- clientes ----- */
+var CF_VAZIO = { uf:'', cidade:'', nome:'', fantasia:'', compra:'', de:'', ate:'' };
+var CF = Object.assign({}, CF_VAZIO, lsGet('cv_cfiltro', {}));
+var COMPRAS = [['','Qualquer'],['r30','Comprou nos últimos 30 dias'],['r60','Comprou nos últimos 60 dias'],['r90','Comprou nos últimos 90 dias'],['r180','Comprou nos últimos 180 dias'],
+  ['s30','Sem comprar há mais de 30 dias'],['s60','Sem comprar há mais de 60 dias'],['s90','Sem comprar há mais de 90 dias'],['s180','Sem comprar há mais de 180 dias'],['s365','Sem comprar há mais de 1 ano'],
+  ['nunca','Nunca comprou'],['entre','Última compra entre datas…']];
+function dataCurta(iso){ if (!iso) return ''; var d = new Date(iso); return p2(d.getDate()) + '/' + p2(d.getMonth()+1) + '/' + d.getFullYear(); }
+/* última compra e nº de pedidos de cada cliente (pedidos não cancelados, ligados pelo CNPJ ou pelo nome) */
+function comprasPorCliente(){
+  var m = {};
+  listaPedidos().forEach(function(p){
+    if (p.status === 'cancelado') return;
+    var c = p.cliente || {}, k = soNum(c.doc) || ('n:' + semAcento(c.name).trim()); if (k === 'n:') return;
+    var r = m[k] || (m[k] = { n: 0, ult: '' }); r.n++;
+    if (String(p.criado_em||'') > r.ult) r.ult = String(p.criado_em||'');
+  });
+  return m;
+}
+function compraDe(m, c){ return m[soNum(c.doc)] || m['n:' + semAcento(c.nome).trim()] || { n: 0, ult: '' }; }
+function nFiltros(){ return ['uf','cidade','nome','fantasia','compra'].filter(function(k){ return CF[k]; }).length; }
+function passaFiltro(c, comp){
+  if (CF.uf && (c.uf||'') !== CF.uf) return false;
+  if (CF.cidade && semAcento(c.cidade) !== semAcento(CF.cidade)) return false;
+  if (CF.nome && semAcento(c.nome).indexOf(semAcento(CF.nome)) < 0) return false;
+  if (CF.fantasia && semAcento(c.fantasia).indexOf(semAcento(CF.fantasia)) < 0) return false;
+  if (CF.compra){
+    var u = comp.ult ? new Date(comp.ult).getTime() : 0, dias = u ? (Date.now() - u) / 864e5 : Infinity, n = parseInt(CF.compra.slice(1), 10);
+    if (CF.compra === 'nunca') return !u;
+    if (CF.compra[0] === 'r') return u && dias <= n;
+    if (CF.compra[0] === 's') return !u || dias > n;
+    if (CF.compra === 'entre'){
+      if (!u) return false;
+      if (CF.de && u < new Date(CF.de + 'T00:00:00').getTime()) return false;
+      if (CF.ate && u > new Date(CF.ate + 'T23:59:59').getTime()) return false;
+    }
+  }
+  return true;
+}
+function resumoFiltro(){
+  var t = [];
+  if (CF.uf) t.push('UF: ' + CF.uf);
+  if (CF.cidade) t.push('Cidade: ' + CF.cidade);
+  if (CF.nome) t.push('Razão social: ' + CF.nome);
+  if (CF.fantasia) t.push('Fantasia: ' + CF.fantasia);
+  if (CF.compra){ var o = COMPRAS.find(function(x){ return x[0] === CF.compra; }); t.push('Última compra: ' + (CF.compra === 'entre' ? (CF.de ? dataCurta(CF.de + 'T12:00') : '…') + ' a ' + (CF.ate ? dataCurta(CF.ate + 'T12:00') : '…') : o[1].toLowerCase())); }
+  return t;
+}
 function telaClientes(arg){
   var q = (arg ? decodeURIComponent(arg) : '').toLowerCase();
-  var cnt = {}; listaPedidos().forEach(function(p){ var d = soNum(p.cliente && p.cliente.doc) || (p.cliente && p.cliente.name); cnt[d] = (cnt[d]||0) + 1; });
-  var lista = S.clientes.filter(function(c){ return !q || [c.nome, c.fantasia, c.doc, c.codigo, c.cidade].join(' ').toLowerCase().indexOf(q) > -1; });
+  var comp = comprasPorCliente();
+  var lista = S.clientes.filter(function(c){ return (!q || semAcento([c.nome, c.fantasia, c.doc, c.codigo, c.cidade].join(' ')).indexOf(semAcento(q)) > -1) && passaFiltro(c, compraDe(comp, c)); });
   lista.sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''), 'pt-BR'); });
+  var nf = nFiltros(), rf = resumoFiltro();
   casca('<div class="row" style="justify-content:space-between"><h1 style="margin:4px 0">Clientes</h1><a class="btn pri" href="#cliente/novo">+ Novo cliente</a></div>' +
-    '<input class="in" id="qCli" placeholder="Buscar por razão social, fantasia, CNPJ, código ou cidade" value="' + esc(q) + '" style="margin-top:10px">' +
-    '<p class="muted" style="font-size:13px">Clientes entram aqui automaticamente pelo CNPJ quando enviam um Pedido Express ou quando você lança um pedido. Use “+ Novo cliente” para cadastrar à mão.</p>' +
+    '<div class="row nw" style="margin-top:10px;flex-wrap:nowrap"><input class="in" id="qCli" placeholder="Buscar por razão social, fantasia, CNPJ, código ou cidade" value="' + esc(q) + '">' +
+    '<button class="btn' + (nf ? ' pri' : '') + '" id="bFiltro" style="white-space:nowrap">⚲ Filtro' + (nf ? ' (' + nf + ')' : '') + '</button></div>' +
+    (nf ? '<div class="note info row" style="justify-content:space-between"><span>' + esc(rf.join(' · ')) + '</span><button class="btn sm" id="bLimpaF">Limpar filtro</button></div>' : '') +
+    '<p class="muted" style="font-size:13px">' + lista.length + ' de ' + S.clientes.length + ' cliente(s). Clientes entram aqui automaticamente pelo CNPJ quando enviam um Pedido Express ou quando você lança um pedido. Use “+ Novo cliente” para cadastrar à mão.</p>' +
     '<div class="list">' + (lista.length ? lista.map(function(c){
-      var pend = S.cfila.indexOf(c.id) > -1;
+      var pend = S.cfila.indexOf(c.id) > -1, cp = compraDe(comp, c);
       return '<div class="card pad"><div class="row"><div class="grow"><b>' + esc(c.nome) + '</b>' +
         (c.codigo ? ' <span class="badge">cód. ' + esc(c.codigo) + '</span>' : '') +
         (c.confirmado || pend ? '' : ' <span class="badge b-pend">pré-cadastro</span>') +
@@ -541,11 +590,41 @@ function telaClientes(arg){
         (pend ? ' <span class="badge b-pend">' + (c._erro ? 'não subiu' : 'aguardando envio') + '</span>' : '') +
         (c.fantasia ? '<div style="font-size:13px">' + esc(c.fantasia) + '</div>' : '') +
         '<div class="muted" style="font-size:13px">' + esc([fmtDoc(c.doc), [c.cidade, c.uf].filter(Boolean).join('/'), c.telefone].filter(Boolean).join(' · ')) + '</div>' +
+        '<div class="muted" style="font-size:12.5px">Última compra: ' + (cp.ult ? dataCurta(cp.ult) : '—') + '</div>' +
         (c._erro ? '<div class="note bad" style="margin:6px 0 0">' + esc(c._erro) + '</div>' : '') + '</div>' +
-        '<div class="row" style="gap:6px"><a class="btn sm" href="#cliente/' + c.id + '">Editar</a><button class="btn sm" data-ver="' + esc(c.nome) + '">' + (cnt[c.doc] || 0) + ' pedido(s)</button><a class="btn sm pri" href="#novo/' + c.id + '">Novo pedido</a></div></div></div>';
+        '<div class="row" style="gap:6px"><a class="btn sm" href="#cliente/' + c.id + '">Editar</a><button class="btn sm" data-ver="' + esc(c.nome) + '">' + cp.n + ' pedido(s)</button><a class="btn sm pri" href="#novo/' + c.id + '">Novo pedido</a></div></div></div>';
     }).join('') : '<div class="card empty">' + (S.clientes.length ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.') + '</div>') + '</div>');
   document.getElementById('qCli').onchange = function(){ location.hash = '#clientes/' + encodeURIComponent(this.value); };
+  document.getElementById('bFiltro').onclick = function(){ abrirFiltroClientes(arg); };
+  var lf = document.getElementById('bLimpaF'); if (lf) lf.onclick = function(){ CF = Object.assign({}, CF_VAZIO); lsSet('cv_cfiltro', CF); telaClientes(arg); };
   $app.querySelectorAll('[data-ver]').forEach(function(b){ b.onclick = function(){ S.filtro = { st:'', org:'', vend:'', q: b.dataset.ver }; location.hash = '#pedidos'; }; });
+}
+function abrirFiltroClientes(arg){
+  var ufs = {}; S.clientes.forEach(function(c){ if (c.uf) ufs[c.uf] = 1; }); ufs = Object.keys(ufs).sort();
+  function cidadesDe(uf){ var m = {}; S.clientes.forEach(function(c){ if (c.cidade && (!uf || c.uf === uf)){ var k = semAcento(c.cidade).trim(); if (!m[k]) m[k] = c.cidade.trim(); } }); return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); }); }
+  var m = modal('Filtrar clientes',
+    '<label class="lb">UF</label><select class="in" id="fUf"><option value="">Todas</option>' + ufs.map(function(u){ return '<option' + (CF.uf === u ? ' selected' : '') + '>' + u + '</option>'; }).join('') + '</select>' +
+    '<label class="lb">Cidade</label><select class="in" id="fCid"></select>' +
+    '<label class="lb">Razão social</label><input class="in" id="fNome" placeholder="Parte da razão social" value="' + esc(CF.nome) + '">' +
+    '<label class="lb">Nome fantasia</label><input class="in" id="fFan" placeholder="Parte do nome fantasia" value="' + esc(CF.fantasia) + '">' +
+    '<label class="lb">Última compra</label><select class="in" id="fComp">' + COMPRAS.map(function(o){ return '<option value="' + o[0] + '"' + (CF.compra === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+    '<div class="grid2" id="fDatas"><div><label class="lb">De</label><input class="in" type="date" id="fDe" value="' + esc(CF.de) + '"></div><div><label class="lb">Até</label><input class="in" type="date" id="fAte" value="' + esc(CF.ate) + '"></div></div>' +
+    '<p class="muted" style="font-size:12.5px">Última compra = pedido mais recente do cliente no programa (Pedido Express ou lançado aqui), sem contar cancelados.</p>' +
+    '<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="fLimpar">Limpar</button><button class="btn pri" id="fAplicar">Aplicar filtro</button></div>');
+  var g = function(id){ return document.getElementById(id); };
+  function montaCid(){ var l = cidadesDe(g('fUf').value), atual = CF.cidade;
+    g('fCid').innerHTML = '<option value="">Todas</option>' + l.map(function(n){ return '<option' + (semAcento(n) === semAcento(atual) ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join(''); }
+  function datas(){ g('fDatas').hidden = g('fComp').value !== 'entre'; }
+  montaCid(); datas();
+  g('fUf').onchange = function(){ CF.cidade = ''; montaCid(); };
+  g('fComp').onchange = datas;
+  function fechar(){ m.ov.remove(); document.body.style.overflow = ''; }
+  g('fLimpar').onclick = function(){ CF = Object.assign({}, CF_VAZIO); lsSet('cv_cfiltro', CF); fechar(); telaClientes(arg); };
+  g('fAplicar').onclick = function(){
+    CF = { uf: g('fUf').value, cidade: g('fCid').value, nome: g('fNome').value.trim(), fantasia: g('fFan').value.trim(), compra: g('fComp').value, de: g('fDe').value, ate: g('fAte').value };
+    if (CF.compra !== 'entre'){ CF.de = ''; CF.ate = ''; }
+    lsSet('cv_cfiltro', CF); fechar(); telaClientes(arg);
+  };
 }
 
 /* ----- cadastro de cliente ----- */
