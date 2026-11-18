@@ -1137,7 +1137,7 @@
         '<div class="item-code">'+it.cod+'</div>'+
         '<div class="item-desc">'+it.desc+'</div>'+
         (it.step>1 ? '<div class="mult-note">Múltiplos de '+it.step+' un</div>' : '')+
-        (!it.avail ? '<div class="price-row"><span class="price">'+(it.sp?fmt(it.price):'Sob consulta')+'</span></div>' : it.tiers ? '' :
+        (!it.avail ? '<div class="price-row"><span class="price">'+fmt(it.price)+'</span></div>' : it.tiers ? '' :
           '<div class="price-row">'+
             '<span class="price">'+fmt(it.price)+
               (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '')+
@@ -1956,7 +1956,7 @@
     } else {
       if (pdPriceRow) pdPriceRow.style.display = '';
       var off = pctOff(it.orig, it.price);
-      pdPrice.innerHTML = !it.avail ? (it.sp?fmt(it.price):'Sob consulta') : fmt(it.price) + (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '');
+      pdPrice.innerHTML = !it.avail ? fmt(it.price) : fmt(it.price) + (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '');
       pdOrig.textContent = it.orig ? fmt(it.orig) : '';
       pdOrig.style.display = (it.orig && it.avail) ? '' : 'none';
     }
