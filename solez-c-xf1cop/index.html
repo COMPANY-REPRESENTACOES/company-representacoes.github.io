@@ -1096,7 +1096,7 @@
   var tierSelection = {}; // n -> chosen tier index, for items with `tiers`
   var currentProduct = null; // item.n currently open in the detail sheet
   /* ---------- política comercial Solez ---------- */
-  var POL = { tiers:[[0,40],[4600,44],[8999,48]], limit:8999, terms:[['À vista',20],['30 DD',18],['30/45/60/75 DD',15],['40/45/60/90 DD',10],['30/60/90/120 DD',10]] };
+  var POL = { tiers:[[0,40],[4600,44],[8999,48]], limit:8999, terms:[['À vista',17],['30 DD',18],['30/45/60/75 DD',15],['40/45/60/90 DD',10],['30/60/90/120 DD',10]] };
   var termIdx = -1; // nenhum prazo escolhido ao abrir: só o desconto de valor de pedido
   function termPct(){ return termIdx < 0 ? 0 : POL.terms[termIdx][1]; }
   function qtyOf(v){ return (v && typeof v === 'object') ? v.qty : v; }
