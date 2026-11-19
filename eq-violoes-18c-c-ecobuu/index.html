@@ -1,4 +1,7 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}  .field .req{color:#d0121b;font-weight:800;}
+  .field input.invalid{border-color:#d0121b !important;box-shadow:0 0 0 3px rgba(208,18,27,.15);background:#fff6f6;}
+  .req-msg{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff1f1;border:1px solid #f3b4b7;color:#a30d15;font-size:13px;font-weight:600;}
+</style></head><body>
 <meta name="robots" content="noindex,nofollow">
 <meta charset="utf-8">
 <title>PEDIDO EXPRESS COMPANY ( WALDMAN VIOLÕES ) Clara (Desc 18% · com IPI)</title>
@@ -966,8 +969,8 @@
       <b id="sheetTotal">R$ 0,00</b>
     </div>
     <div class="field">
-      <label for="clientName">Seu nome / empresa</label>
-      <input id="clientName" type="text" placeholder="Ex: João - Som&Cia">
+      <label for="clientName">Nome da empresa <span class="req">*</span></label>
+      <input id="clientName" type="text" required>
     </div>
     <div class="field-row">
       <div class="field">
@@ -984,9 +987,14 @@
       <input id="clientCity" type="text" placeholder="Ex: Cuiabá / MT">
     </div>
     <div class="field">
-      <label for="clientCarrier">Transportadora</label>
-      <input id="clientCarrier" type="text">
+      <label for="clientCarrier">Transportadora <span class="req">*</span></label>
+      <input id="clientCarrier" type="text" required>
     </div>
+    <div class="field">
+      <label for="clientTerm">Prazo (definido pelo representante)</label>
+      <input id="clientTerm" type="text">
+    </div>
+    <div class="req-msg" id="reqMsg" hidden>Preencha os campos obrigatórios: <b id="reqList"></b></div>
     <div class="field">
       <label for="clientObs">Observação (opcional)</label>
       <textarea id="clientObs" rows="2"></textarea>
@@ -1453,6 +1461,7 @@
   function makeOrderPdf(forWhats){
     var o = buildOrderLines(forWhats);
     if (o.entries.length === 0) return null;
+    if (!checkRequired()) return null;
     o.date = new Date();
     var pdf = buildOrderPdf(o);
     var safeName = (o.name || 'cliente').toLowerCase()
@@ -1808,6 +1817,84 @@
     }catch(e){ return null; }
   }
 
+
+  /* ===== PADRÃO PEDIDO EXPRESS: foto, R$ Tabela, Desc. % aplicado, R$ Unit c/ desc. e R$ Total no PDF ===== */
+  function pxR2(v){ return Math.round(v * 100) / 100; }
+  function pxPctStr(r){ var p = Math.round((1 - r) * 1000) / 10; return p.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'; }
+  function pxLabel(unit, tab, comps){
+    if (!tab || !unit) return '—';
+    var r = unit / tab;
+    if (r > 0.995) return '—';
+    for (var i = 0; i < comps.length; i++){ if (Math.abs(r - comps[i][1]) < 0.004) return comps[i][0]; }
+    return pxPctStr(r);
+  }
+  function pxInfo(e){
+    try {
+      var tab = e.unit ? pxR2(e.unit / 0.8200000000000001) : 0;
+      return { tab: tab, label: e.unit ? '18%' : '—' };
+    } catch(err){ return { tab: e.unit, label: '—' }; }
+  }
+  var PX_THUMBS = {};
+  function pxWarm(src){
+    if (!src || PX_THUMBS[src]) return;
+    var im = new Image();
+    PX_THUMBS[src] = { el: im, jpg: null };
+    if (/^https?:/i.test(src) && src.indexOf(location.origin) !== 0) im.crossOrigin = 'anonymous';
+    im.onload = function(){ pxThumb(src); };
+    im.src = src;
+  }
+  function pxThumb(src){
+    var t = PX_THUMBS[src];
+    if (!t) return null;
+    if (t.jpg) return t.jpg;
+    var im = t.el;
+    if (!im || !im.complete || !im.naturalWidth) return null;
+    try {
+      var r = Math.min(1, 220 / Math.max(im.naturalWidth, im.naturalHeight));
+      var w = Math.max(1, Math.round(im.naturalWidth * r)), h = Math.max(1, Math.round(im.naturalHeight * r));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(im, 0, 0, w, h);
+      t.jpg = { url: c.toDataURL('image/jpeg', 0.85), w: w, h: h };
+      return t.jpg;
+    } catch(err){ t.jpg = null; return null; }
+  }
+  function pxWarmCart(){ try { cartEntries().forEach(function(e){ if (e.it) pxWarm(e.it.img); }); } catch(err){} }
+  document.addEventListener('click', function(){ setTimeout(pxWarmCart, 30); }, true);
+  document.addEventListener('change', function(){ setTimeout(pxWarmCart, 30); }, true);
+  document.addEventListener('input', function(){ setTimeout(pxWarmCart, 30); }, true);
+  setTimeout(pxWarmCart, 500);
+
+  /* ===== PADRÃO: campos obrigatórios (Nome da empresa e Transportadora) ===== */
+  function checkRequired(){
+    var req = [['clientName','Nome da empresa'],['clientCarrier','Transportadora']], miss = [], first = null;
+    req.forEach(function(r){
+      var el = document.getElementById(r[0]);
+      if (!el) return;
+      var bad = !el.value.trim();
+      el.classList.toggle('invalid', bad);
+      if (bad){ miss.push(r[1]); if (!first) first = el; }
+    });
+    var msg = document.getElementById('reqMsg');
+    if (miss.length){
+      if (msg){ document.getElementById('reqList').textContent = miss.join(' e '); msg.hidden = false; }
+      try { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(err){}
+      try { first.focus({ preventScroll: true }); } catch(err){ first.focus(); }
+      return false;
+    }
+    if (msg) msg.hidden = true;
+    return true;
+  }
+  ['clientName','clientCarrier'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function(){
+      if (this.value.trim()) this.classList.remove('invalid');
+      var a = document.getElementById('clientName'), b = document.getElementById('clientCarrier'), m = document.getElementById('reqMsg');
+      if (m && a && b && a.value.trim() && b.value.trim()) m.hidden = true;
+    });
+  });
+  function pxTerm(){ var el = document.getElementById('clientTerm'); return el ? el.value.trim() : ''; }
+
   function buildOrderPdf(o){
     var RED = '#6a2c9e', DARK = '#1b1b1d', MUTED = '#6c6c70', LINE = '#dcd9d3', SOFT = '#f6f5f2';
     var doc = new PdfDoc(), M = 36, W = doc.W, CW = W - 2*M, BOTTOM = doc.H - 58;
@@ -1838,7 +1925,7 @@
       var lines = pdfWrap(v, true, 9.5, w);
       doc.text(x, yy + 12, lines[0] + (lines.length > 1 ? '…' : ''), { size: 9.5, bold: true, color: DARK });
     }
-    var boxH = 18 + 3*28 + 4;
+    var boxH = 18 + 4*28 + 4;
     doc.rect(M, y, CW, boxH, null, LINE, 0.8);
     doc.rect(M, y, CW, 18, SOFT);
     doc.line(M, y+18, M+CW, y+18, LINE, 0.8);
@@ -1851,28 +1938,37 @@
     field(fx + 2*colW, fy, 'Cidade / UF', o.city, colW - 10);
     fy += 28;
     field(fx, fy, 'Transportadora', o.carrier, colW - 10);
-    field(fx + colW, fy, 'Representante', 'Company Representações · (65) 99299-3824', 2*colW - 10);
+    var pxT = pxTerm();
+    doc.text(fx + colW, fy, 'PRAZO (DEFINIDO PELO REPRESENTANTE)', { size: 6.8, bold: true, color: RED });
+    doc.text(fx + colW, fy + 12, pdfWrap(pxT || 'A definir pelo representante', true, 9.5, 2*colW - 10)[0], { size: 9.5, bold: true, color: pxT ? RED : MUTED });
+    fy += 28;
+    field(fx, fy, 'Representante', 'Company Representações · (65) 99299-3824', 2*colW - 10);
     y += boxH + 16;
 
-    // Tabela de itens
+    // Tabela de itens (padrão: foto, R$ Tabela, Desc. % aplicado, R$ Unit. c/ desc. e R$ Total)
     var cols = [
-      { t:'#', w:22, a:'center' },
-      { t:'CÓDIGO', w:78, a:'left' },
-      { t:'DESCRIÇÃO', w:0, a:'left' },
-      { t:'QTD', w:38, a:'right' },
-      { t:'VLR. UNIT.', w:68, a:'right' },
-      { t:'TOTAL', w:74, a:'right' }
+      { t:['#'], w:16, a:'center' },
+      { t:['FOTO'], w:44, a:'center' },
+      { t:['CÓDIGO'], w:60, a:'left' },
+      { t:['PRODUTO'], w:0, a:'left' },
+      { t:['QTD'], w:26, a:'right' },
+      { t:['R$','TABELA'], w:52, a:'right' },
+      { t:['DESC. %','APLICADO'], w:58, a:'right' },
+      { t:['R$ UNIT.','C/ DESC.'], w:54, a:'right' },
+      { t:['R$','TOTAL'], w:58, a:'right' }
     ];
-    cols[2].w = CW - cols.reduce(function(s,c){ return s + c.w; }, 0);
-    var PAD = 5;
+    cols[3].w = CW - cols.reduce(function(s,c){ return s + c.w; }, 0);
+    var PAD = 4, HDR = 24, ROWMIN = 46, LH = 9.5;
     function colX(i){ var x = M; for (var k=0;k<i;k++) x += cols[k].w; return x; }
+    function fmtN(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
     function drawHeader(){
-      doc.rect(M, y, CW, 18, RED);
+      doc.rect(M, y, CW, HDR, RED);
       cols.forEach(function(c,i){
         var x = c.a === 'right' ? colX(i) + c.w - PAD : c.a === 'center' ? colX(i) + c.w/2 : colX(i) + PAD;
-        doc.text(x, y + 12, c.t, { size: 7.5, bold: true, color: '#ffffff', align: c.a });
+        var y0 = c.t.length === 1 ? y + 15 : y + 10;
+        c.t.forEach(function(tl, li){ doc.text(x, y0 + li*8.5, tl, { size: 6.8, bold: true, color: '#ffffff', align: c.a }); });
       });
-      y += 18;
+      y += HDR;
     }
     function newPage(){
       doc.addPage();
@@ -1881,38 +1977,66 @@
       y += 18;
       drawHeader();
     }
+    function vlines(arr, x, mid, opt){
+      var y0 = mid - (arr.length-1)*LH/2 + 3;
+      arr.forEach(function(l, li){ doc.text(x, y0 + li*LH, l, opt); });
+    }
     drawHeader();
-    var totalQty = 0;
+    var totalQty = 0, totalTab = 0, totalTabOk = true;
     o.entries.forEach(function(e, idx){
       var desc = e.it.desc + (e.label ? ' — ' + e.label : '');
-      var lines = pdfWrap(desc, false, 8.5, cols[2].w - 2*PAD);
-      var rowH = Math.max(18, lines.length * 10.5 + 8);
+      var lines = pdfWrap(desc, false, 7.8, cols[3].w - 2*PAD);
+      var codArr = pdfWrap(e.it.cod, true, 7.5, cols[2].w - 2*PAD);
+
+      var inf = pxInfo(e), tab = inf.tab || 0;
+      var labArr = pdfWrap(inf.label, true, 7.2, cols[6].w - 2*PAD);
+      var rowH = Math.max(ROWMIN, Math.max(lines.length, codArr.length, labArr.length) * LH + 12);
       if (y + rowH > BOTTOM) newPage();
       if (idx % 2 === 1) doc.rect(M, y, CW, rowH, SOFT);
-      var base = y + 12;
-      doc.text(colX(0) + cols[0].w/2, base, String(idx+1), { size: 8.5, color: MUTED, align: 'center' });
-      doc.text(colX(1) + PAD, base, e.it.cod, { size: 8.5, bold: true });
-      lines.forEach(function(l, li){ doc.text(colX(2) + PAD, base + li*10.5, l, { size: 8.5 }); });
-      doc.text(colX(3) + cols[3].w - PAD, base, String(e.qty), { size: 8.5, bold: true, align: 'right' });
-      doc.text(colX(4) + cols[4].w - PAD, base, fmt(e.unit), { size: 8.5, align: 'right' });
-      doc.text(colX(5) + cols[5].w - PAD, base, fmt(e.qty * e.unit), { size: 8.5, bold: true, align: 'right' });
+      var mid = y + rowH/2, base = mid + 3;
+      doc.text(colX(0) + cols[0].w/2, base, String(idx+1), { size: 7.8, color: MUTED, align: 'center' });
+      var box = 38, bx = colX(1) + (cols[1].w - box)/2, by = y + (rowH - box)/2;
+      var th = pxThumb(e.it.img);
+      if (th){
+        var sc = Math.min(box/th.w, box/th.h), iw = th.w*sc, ih = th.h*sc;
+        doc.image(doc.addJpeg(th.url, th.w, th.h), bx + (box-iw)/2, by + (box-ih)/2, iw, ih);
+      } else {
+        doc.rect(bx, by, box, box, '#ffffff', LINE, 0.5);
+      }
+      vlines(codArr, colX(2) + PAD, mid, { size: 7.5, bold: true });
+      vlines(lines, colX(3) + PAD, mid, { size: 7.8 });
+      doc.text(colX(4) + cols[4].w - PAD, base, String(e.qty), { size: 8, bold: true, align: 'right' });
+      if (e.unit){
+        doc.text(colX(5) + cols[5].w - PAD, base, tab ? fmtN(tab) : '—', { size: 7.8, color: MUTED, align: 'right' });
+        vlines(labArr, colX(6) + cols[6].w - PAD, mid, { size: 7.2, bold: true, color: RED, align: 'right' });
+        doc.text(colX(7) + cols[7].w - PAD, base, fmtN(e.unit), { size: 7.8, align: 'right' });
+        doc.text(colX(8) + cols[8].w - PAD, base, fmtN(e.qty * e.unit), { size: 8, bold: true, align: 'right' });
+      } else {
+        doc.text(colX(8) + cols[8].w - PAD, base, 'Sob consulta', { size: 7.5, bold: true, align: 'right' });
+      }
       y += rowH;
       doc.line(M, y, M + CW, y, LINE, 0.5);
       totalQty += e.qty;
+      if (tab && e.unit) totalTab += e.qty * tab; else if (e.unit) totalTabOk = false;
     });
 
     // Totais
     var obsLines = o.obs ? pdfWrap(o.obs, false, 9, CW - 20) : [];
-    var need = 50 + (obsLines.length ? obsLines.length * 12 + 34 : 0) + 70;
+    var need = 76 + (obsLines.length ? obsLines.length * 12 + 34 : 0) + 70;
     if (y + need > BOTTOM) { doc.addPage(); y = M; }
     y += 10;
-    var tw = 220;
-    doc.rect(W - M - tw, y, tw, 40, SOFT, LINE, 0.8);
+    var tw = 215;
+    doc.rect(W - M - tw, y, tw, 66, SOFT, LINE, 0.8);
     doc.text(W - M - tw + 10, y + 14, o.entries.length + (o.entries.length === 1 ? ' item' : ' itens') + ' · ' + totalQty + ' peças', { size: 8, color: MUTED });
-    doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
-    doc.text(W - M - 10, y + 31, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
+    doc.text(W - M - tw + 10, y + 27, 'Total pela tabela', { size: 8, color: MUTED });
+    doc.text(W - M - 10, y + 27, totalTabOk ? fmt(totalTab) : '—', { size: 8, color: MUTED, align: 'right' });
+    doc.text(W - M - tw + 10, y + 39, 'Desconto aplicado', { size: 8, color: MUTED });
+    doc.text(W - M - 10, y + 39, totalTabOk ? '- ' + fmt(Math.max(0, totalTab - o.total)) : '—', { size: 8, color: MUTED, align: 'right' });
+    doc.line(W - M - tw + 10, y + 45, W - M - 10, y + 45, LINE, 0.6);
+    doc.text(W - M - tw + 10, y + 58, 'TOTAL DO PEDIDO', { size: 9, bold: true });
+    doc.text(W - M - 10, y + 58, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
     doc.text(M, y + 14, 'Preços com IPI conforme estoque Equipo 18/11/26', { size: 8, color: MUTED });
-    y += 56;
+    y += 82;
 
     if (obsLines.length){
       doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED });
