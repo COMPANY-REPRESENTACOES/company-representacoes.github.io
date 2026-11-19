@@ -955,15 +955,23 @@ function gerarEspelho(p){
 /* ----- enviar por WhatsApp (espelho em PDF para o cliente) ----- */
 function foneWa(f){ var n = soNum(f); if (!n) return ''; if (n.length <= 11) n = '55' + n; return n; }
 function enviarWhatsApp(p){
-  var r = montarPdf(p), c = p.cliente || {}, n = foneWa(c.phone);
-  var texto = 'Olá! Segue o espelho do pedido ' + p.numero + ' (' + fmt(totalItens(p.itens)) + ') para sua aprovação.';
+  var r = montarPdf(p);
   if (podeCompartilhar(r.file)){
-    navigator.share({ files: [r.file], title: 'Pedido ' + p.numero, text: texto }).catch(function(){});
+    // celular: abre a lista de apps com o PDF; escolha o WhatsApp e depois a quem enviar
+    navigator.share({ files: [r.file], title: 'Pedido ' + p.numero }).catch(function(){});
   } else {
+    // computador: baixa o PDF e só abre o WhatsApp (sem entrar em conversa)
     baixarPdf(r);
-    window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(texto + '\n(PDF em anexo)'), '_blank');
-    modal('Enviar por WhatsApp', '<p>O PDF <b>' + esc(r.nome) + '</b> foi salvo em <b>Downloads</b> e o WhatsApp' + (n ? ' do cliente' : '') + ' foi aberto em outra aba.</p>' +
-      '<p>Na conversa, clique no <b>clipe 📎</b> → <b>Documento</b> e escolha o PDF para anexar.</p>');
+    var saiu = false, marca = function(){ saiu = true; };
+    window.addEventListener('blur', marca);
+    location.href = 'whatsapp://';
+    setTimeout(function(){
+      window.removeEventListener('blur', marca);
+      modal('Enviar por WhatsApp', '<p>O PDF <b>' + esc(r.nome) + '</b> foi salvo na pasta <b>Downloads</b>.</p>' +
+        '<p>No WhatsApp, abra a conversa de quem vai receber, clique no <b>clipe 📎</b> → <b>Documento</b> e escolha o PDF.</p>' +
+        (saiu ? '' : '<p class="muted">Se o WhatsApp do computador não abriu, use o WhatsApp Web:</p>') +
+        '<div class="row" style="gap:8px;margin-top:10px"><a class="btn wa" style="background:#25d366;border-color:#1ea952;color:#fff" href="https://web.whatsapp.com/" target="_blank" rel="noopener">Abrir WhatsApp Web</a></div>');
+    }, 1500);
   }
   if (p.status === 'recebido' || p.status === 'em_revisao'){
     if (confirm('Marcar o pedido como “Espelho enviado” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
