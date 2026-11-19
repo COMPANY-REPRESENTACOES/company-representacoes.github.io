@@ -1051,7 +1051,41 @@
   try { localStorage.removeItem('avs_cart_v1_c'); } catch(e) {}
 
   function saveCart(){
+    warmCartThumbs();
     try { localStorage.setItem('avs_cart_v1_c', JSON.stringify(cart)); } catch(e){}
+  }
+
+  /* miniaturas JPEG dos produtos para o PDF (pré-carregadas quando o item entra no pedido) */
+  var PDF_THUMBS = {};
+  function warmThumb(it){
+    if (!it || !it.img || PDF_THUMBS[it.im]) return;
+    var im = new Image();
+    PDF_THUMBS[it.im] = { el: im, jpg: null };
+    im.onload = function(){ thumbToJpeg(it.im); };
+    im.src = it.img;
+  }
+  function thumbToJpeg(k){
+    var t = PDF_THUMBS[k];
+    if (!t) return null;
+    if (t.jpg) return t.jpg;
+    var im = t.el;
+    if (!im || !im.complete || !im.naturalWidth) return null;
+    try{
+      var MAXP = 220, r = Math.min(1, MAXP / Math.max(im.naturalWidth, im.naturalHeight));
+      var w = Math.max(1, Math.round(im.naturalWidth*r)), h = Math.max(1, Math.round(im.naturalHeight*r));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h); ctx.drawImage(im,0,0,w,h);
+      t.jpg = { url: c.toDataURL('image/jpeg', 0.85), w: w, h: h };
+      return t.jpg;
+    }catch(e){ return null; }
+  }
+  function warmCartThumbs(){
+    try{
+      Object.keys(cart).forEach(function(k){
+        var n = parseInt(k,10);
+        warmThumb(ITEMS.find(function(i){ return i.n === n; }));
+      });
+    }catch(e){}
   }
 
   function fmt(v){
@@ -1763,25 +1797,30 @@
     field(fx + colW, fy, 'Representante', 'Company Representações · (65) 99299-3824', 2*colW - 10);
     y += boxH + 16;
 
-    // Tabela de itens
+    // Tabela de itens (foto, preço de tabela, desconto, unitário c/ desconto e total)
     var cols = [
-      { t:'#', w:22, a:'center' },
-      { t:'CÓDIGO', w:78, a:'left' },
-      { t:'DESCRIÇÃO', w:0, a:'left' },
-      { t:'QTD', w:38, a:'right' },
-      { t:'VLR. UNIT.', w:68, a:'right' },
-      { t:'TOTAL', w:74, a:'right' }
+      { t:['#'], w:16, a:'center' },
+      { t:['FOTO'], w:44, a:'center' },
+      { t:['CÓDIGO'], w:60, a:'left' },
+      { t:['PRODUTO'], w:0, a:'left' },
+      { t:['QTD'], w:28, a:'right' },
+      { t:['R$','TABELA'], w:52, a:'right' },
+      { t:['DESC. %','APLICADO'], w:46, a:'right' },
+      { t:['R$ UNIT.','C/ DESC.'], w:54, a:'right' },
+      { t:['R$','TOTAL'], w:60, a:'right' }
     ];
-    cols[2].w = CW - cols.reduce(function(s,c){ return s + c.w; }, 0);
-    var PAD = 5;
+    cols[3].w = CW - cols.reduce(function(s,c){ return s + c.w; }, 0);
+    var PAD = 4, HDR = 24, ROWMIN = 46;
     function colX(i){ var x = M; for (var k=0;k<i;k++) x += cols[k].w; return x; }
+    function fmtN(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
     function drawHeader(){
-      doc.rect(M, y, CW, 18, RED);
+      doc.rect(M, y, CW, HDR, RED);
       cols.forEach(function(c,i){
         var x = c.a === 'right' ? colX(i) + c.w - PAD : c.a === 'center' ? colX(i) + c.w/2 : colX(i) + PAD;
-        doc.text(x, y + 12, c.t, { size: 7.5, bold: true, color: '#ffffff', align: c.a });
+        var y0 = c.t.length === 1 ? y + 15 : y + 10;
+        c.t.forEach(function(tl, li){ doc.text(x, y0 + li*8.5, tl, { size: 6.8, bold: true, color: '#ffffff', align: c.a }); });
       });
-      y += 18;
+      y += HDR;
     }
     function newPage(){
       doc.addPage();
@@ -1791,37 +1830,60 @@
       drawHeader();
     }
     drawHeader();
-    var totalQty = 0;
+    var totalQty = 0, totalTab = 0;
     o.entries.forEach(function(e, idx){
       var desc = e.it.desc + (e.it.pn ? ' (+ custo do bordado/silk sob consulta)' : '') + (e.label ? ' — ' + e.label : '');
-      var lines = pdfWrap(desc, false, 8.5, cols[2].w - 2*PAD);
-      var rowH = Math.max(18, lines.length * 10.5 + 8);
+      var lines = pdfWrap(desc, false, 7.8, cols[3].w - 2*PAD);
+      var codLines = pdfWrap(e.it.cod, true, 7.5, cols[2].w - 2*PAD);
+      var rowH = Math.max(ROWMIN, Math.max(lines.length, codLines.length) * 9.5 + 12);
       if (y + rowH > BOTTOM) newPage();
       if (idx % 2 === 1) doc.rect(M, y, CW, rowH, SOFT);
-      var base = y + 12;
-      doc.text(colX(0) + cols[0].w/2, base, String(idx+1), { size: 8.5, color: MUTED, align: 'center' });
-      doc.text(colX(1) + PAD, base, e.it.cod, { size: 8.5, bold: true });
-      lines.forEach(function(l, li){ doc.text(colX(2) + PAD, base + li*10.5, l, { size: 8.5 }); });
-      doc.text(colX(3) + cols[3].w - PAD, base, String(e.qty), { size: 8.5, bold: true, align: 'right' });
-      doc.text(colX(4) + cols[4].w - PAD, base, fmt(e.unit), { size: 8.5, align: 'right' });
-      doc.text(colX(5) + cols[5].w - PAD, base, fmt(e.qty * e.unit), { size: 8.5, bold: true, align: 'right' });
+      var tab = e.it.orig && e.it.orig > e.unit ? e.it.orig : e.unit;
+      var pct = tab > 0 ? Math.round((1 - e.unit/tab) * 200) / 2 : 0;
+      var mid = y + rowH/2;
+      var base = mid + 3;
+      doc.text(colX(0) + cols[0].w/2, base, String(idx+1), { size: 7.8, color: MUTED, align: 'center' });
+      // foto
+      var box = 38, bx = colX(1) + (cols[1].w - box)/2, by = y + (rowH - box)/2;
+      var th = thumbToJpeg(e.it.im);
+      if (th){
+        var sc = Math.min(box/th.w, box/th.h), iw = th.w*sc, ih = th.h*sc;
+        doc.image(doc.addJpeg(th.url, th.w, th.h), bx + (box-iw)/2, by + (box-ih)/2, iw, ih);
+      } else {
+        doc.rect(bx, by, box, box, '#ffffff', LINE, 0.5);
+      }
+      var ty = mid - (codLines.length-1)*9.5/2 + 3;
+      codLines.forEach(function(l, li){ doc.text(colX(2) + PAD, ty + li*9.5, l, { size: 7.5, bold: true }); });
+      var dy = mid - (lines.length-1)*9.5/2 + 3;
+      lines.forEach(function(l, li){ doc.text(colX(3) + PAD, dy + li*9.5, l, { size: 7.8 }); });
+      doc.text(colX(4) + cols[4].w - PAD, base, String(e.qty), { size: 8, bold: true, align: 'right' });
+      doc.text(colX(5) + cols[5].w - PAD, base, fmtN(tab), { size: 7.8, color: MUTED, align: 'right' });
+      doc.text(colX(6) + cols[6].w - PAD, base, pct.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%', { size: 7.8, bold: true, color: RED, align: 'right' });
+      doc.text(colX(7) + cols[7].w - PAD, base, fmtN(e.unit), { size: 7.8, align: 'right' });
+      doc.text(colX(8) + cols[8].w - PAD, base, fmtN(e.qty * e.unit), { size: 8, bold: true, align: 'right' });
       y += rowH;
       doc.line(M, y, M + CW, y, LINE, 0.5);
       totalQty += e.qty;
+      totalTab += e.qty * tab;
     });
 
     // Totais
     var obsLines = o.obs ? pdfWrap(o.obs, false, 9, CW - 20) : [];
-    var need = 50 + (obsLines.length ? obsLines.length * 12 + 34 : 0) + 70;
+    var need = 76 + (obsLines.length ? obsLines.length * 12 + 34 : 0) + 70;
     if (y + need > BOTTOM) { doc.addPage(); y = M; }
     y += 10;
-    var tw = 220;
-    doc.rect(W - M - tw, y, tw, 40, SOFT, LINE, 0.8);
+    var tw = 240;
+    doc.rect(W - M - tw, y, tw, 66, SOFT, LINE, 0.8);
     doc.text(W - M - tw + 10, y + 14, o.entries.length + (o.entries.length === 1 ? ' item' : ' itens') + ' · ' + totalQty + ' peças', { size: 8, color: MUTED });
-    doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
-    doc.text(W - M - 10, y + 31, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
+    doc.text(W - M - tw + 10, y + 27, 'Total pela tabela', { size: 8, color: MUTED });
+    doc.text(W - M - 10, y + 27, fmt(totalTab), { size: 8, color: MUTED, align: 'right' });
+    doc.text(W - M - tw + 10, y + 39, 'Desconto aplicado', { size: 8, color: MUTED });
+    doc.text(W - M - 10, y + 39, '- ' + fmt(Math.max(0, totalTab - o.total)), { size: 8, color: MUTED, align: 'right' });
+    doc.line(W - M - tw + 10, y + 45, W - M - 10, y + 45, LINE, 0.6);
+    doc.text(W - M - tw + 10, y + 58, 'TOTAL DO PEDIDO', { size: 9, bold: true });
+    doc.text(W - M - 10, y + 58, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
     doc.text(M, y + 14, 'Tabela AVS 04/2026 com 10% + 5% de desconto', { size: 8, color: MUTED });
-    y += 56;
+    y += 82;
 
     if (obsLines.length){
       doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED });
