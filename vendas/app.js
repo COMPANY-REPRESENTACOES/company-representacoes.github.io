@@ -102,7 +102,7 @@ function acharItem(gid, cod){
   return null;
 }
 /* preço de tabela + desconto aplicado (ex.: 12+10+10%) */
-var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]] };
+var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]], avs: [[10,5]] };
 function numBR(x){ return String(Math.round(x*10)/10).replace('.', ','); }
 function precoInfo(p, it){
   var a = acharItem(p.grupo, it.cod), pid = politicaId(p.grupo, p.politica), unit = r2(it.unit), tab = null, d = 0;
