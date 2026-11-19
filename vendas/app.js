@@ -344,7 +344,12 @@ function telaEditor(){
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
   var add = document.getElementById('eAdd'); if (add) add.onclick = function(){ abrirCatalogo(); };
   document.getElementById('eSalvar').onclick = salvarPedido;
-  document.getElementById('ePdf').onclick = function(){ gerarEspelho(ED.p); };
+  prepararFotos(ED.p);
+  document.getElementById('ePdf').onclick = function(){
+    var pp = ED.p;
+    if (fotosProntas(pp)) gerarEspelho(pp);
+    else { toast('Preparando fotos do PDF…'); prepararFotos(pp).then(function(){ gerarEspelho(pp); }); }
+  };
   var wa = document.getElementById('eWa'); if (wa) wa.onclick = function(){ var n = soNum(ED.p.cliente.phone); if (n.length <= 11) n = '55' + n; window.open('https://wa.me/' + n, '_blank'); };
   var bo = document.getElementById('eOrig'); if (bo) bo.onclick = verOriginal;
   var bh = document.getElementById('eHist'); if (bh) bh.onclick = verHistorico;
@@ -817,6 +822,31 @@ function baixarFotos(){
   }).then(function(){ st.textContent = '✓ ' + feitos + ' fotos guardadas para uso offline' + (falhas ? ' (' + falhas + ' falharam — tente de novo com internet)' : '') + '.'; });
 }
 
+/* ----- fotos dos itens para o PDF (convertidas em JPEG e guardadas na memória) ----- */
+var FOTOS = {};
+function fotoJpeg(url){
+  if (FOTOS[url] !== undefined) return Promise.resolve(FOTOS[url]);
+  return new Promise(function(res){
+    var im = new Image(), fim = false;
+    function ok(v){ if (fim) return; fim = true; FOTOS[url] = v; res(v); }
+    im.onload = function(){
+      try {
+        var r = Math.min(1, 220 / Math.max(im.naturalWidth, im.naturalHeight));
+        var w = Math.max(1, Math.round(im.naturalWidth * r)), h = Math.max(1, Math.round(im.naturalHeight * r));
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(im, 0, 0, w, h);
+        ok({ url: c.toDataURL('image/jpeg', 0.85), w: w, h: h });
+      } catch(e){ ok(null); }
+    };
+    im.onerror = function(){ ok(null); };
+    setTimeout(function(){ if (!fim){ fim = true; res(null); } }, 8000); // sem internet: segue sem a foto (tenta de novo depois)
+    im.src = url;
+  });
+}
+function fotosDoPedido(p){ return (p.itens || []).map(function(e){ var u = imgDe(p.grupo, e.cod); return u === 'company.png' ? null : u; }); }
+function fotosProntas(p){ return fotosDoPedido(p).every(function(u){ return !u || FOTOS[u] !== undefined; }); }
+function prepararFotos(p){ return Promise.all(fotosDoPedido(p).map(function(u){ return u ? fotoJpeg(u) : null; })); }
+
 /* ----- PDF espelho ----- */
 function gerarEspelho(p){
   var tot = totalItens(p.itens);
@@ -847,8 +877,8 @@ function gerarEspelho(p){
   field(fx, fy, 'Transportadora', c.carrier, colW - 10);
   field(fx + colW, fy, 'Representante', 'Company Representações · ' + (CFG.vendedores[p.vendedor_codigo] || '') + ' ' + (CFG.fones[p.vendedor_codigo] || ''), 2*colW - 10);
   y += boxH + 16;
-  var cols = [{t:'#',w:18,a:'center'},{t:'CÓDIGO',w:70,a:'left'},{t:'DESCRIÇÃO',w:0,a:'left'},{t:'QTD',w:28,a:'right'},{t:'PREÇO TABELA',w:62,a:'right'},{t:'DESCONTO',w:56,a:'center'},{t:'PREÇO FINAL',w:60,a:'right'},{t:'TOTAL',w:64,a:'right'}];
-  cols[2].w = CW - cols.reduce(function(s,x){ return s + x.w; }, 0);
+  var cols = [{t:'#',w:16,a:'center'},{t:'FOTO',w:40,a:'center'},{t:'CÓDIGO',w:64,a:'left'},{t:'DESCRIÇÃO',w:0,a:'left'},{t:'QTD',w:24,a:'right'},{t:'R$ TABELA',w:58,a:'right'},{t:'DESCONTO',w:52,a:'center'},{t:'PREÇO FINAL',w:56,a:'right'},{t:'TOTAL',w:60,a:'right'}];
+  cols[3].w = CW - cols.reduce(function(s,x){ return s + x.w; }, 0);
   var PAD = 5;
   function colX(i){ var x = M; for (var k=0;k<i;k++) x += cols[k].w; return x; }
   function head(){ doc.rect(M, y, CW, 18, RED); cols.forEach(function(cc,i){ var x = cc.a==='right' ? colX(i)+cc.w-PAD : cc.a==='center' ? colX(i)+cc.w/2 : colX(i)+PAD; doc.text(x, y+12, cc.t, { size: 7.5, bold: true, color: '#ffffff', align: cc.a }); }); y += 18; }
@@ -856,19 +886,22 @@ function gerarEspelho(p){
   var tq = 0, somaTab = 0;
   p.itens.forEach(function(e, idx){
     var desc = e.desc + (e.label ? ' — ' + e.label : '') + (e.marca ? ' (' + e.marca + ')' : '');
-    var lines = pdfWrap(desc, false, 8.5, cols[2].w - 2*PAD), rowH = Math.max(18, lines.length*10.5 + 8);
+    var lines = pdfWrap(desc, false, 8.5, cols[3].w - 2*PAD), rowH = Math.max(44, lines.length*10.5 + 8);
     if (y + rowH > BOTTOM){ doc.addPage(); y = M; doc.text(M, y+8, 'Espelho ' + p.numero + ' · ' + (c.name||'') + ' (continuação)', { size: 8.5, bold: true, color: MUTED }); y += 18; head(); }
     if (idx % 2) doc.rect(M, y, CW, rowH, SOFT);
     var b = y + 12;
     doc.text(colX(0)+cols[0].w/2, b, String(idx+1), { size: 8.5, color: MUTED, align: 'center' });
-    doc.text(colX(1)+PAD, b, e.cod, { size: 8.5, bold: true });
-    lines.forEach(function(l, li){ doc.text(colX(2)+PAD, b + li*10.5, l, { size: 8.5 }); });
-    doc.text(colX(3)+cols[3].w-PAD, b, String(e.qty), { size: 8.5, bold: true, align: 'right' });
+    var ft = FOTOS[imgDe(p.grupo, e.cod)];
+    if (ft){ var bx = 36, sc = Math.min(bx / ft.w, bx / ft.h), iw = ft.w * sc, ih = ft.h * sc;
+      doc.image(doc.addJpeg(ft.url, ft.w, ft.h), colX(1) + (cols[1].w - iw)/2, y + 4 + (bx - ih)/2, iw, ih); }
+    pdfWrap(e.cod, true, 8, cols[2].w - 2*PAD).forEach(function(l, li){ doc.text(colX(2)+PAD, b + li*10, l, { size: 8, bold: true }); });
+    lines.forEach(function(l, li){ doc.text(colX(3)+PAD, b + li*10.5, l, { size: 8.5 }); });
+    doc.text(colX(4)+cols[4].w-PAD, b, String(e.qty), { size: 8.5, bold: true, align: 'right' });
     var pi = precoInfo(p, e); if (pi.tab){ somaTab += pi.tab*e.qty; } else { somaTab += e.unit*e.qty; }
-    doc.text(colX(4)+cols[4].w-PAD, b, pi.tab ? fmt(pi.tab) : '—', { size: 8, color: MUTED, align: 'right' });
-    var dl = pdfWrap(pi.desc || '—', true, 7.5, cols[5].w - 4); dl.forEach(function(l, li){ doc.text(colX(5)+cols[5].w/2, b + li*9, l, { size: 7.5, bold: true, color: RED, align: 'center' }); });
-    doc.text(colX(6)+cols[6].w-PAD, b, fmt(e.unit), { size: 8.5, bold: true, align: 'right' });
-    doc.text(colX(7)+cols[7].w-PAD, b, fmt(r2(e.qty*e.unit)), { size: 8.5, bold: true, align: 'right' });
+    doc.text(colX(5)+cols[5].w-PAD, b, pi.tab ? fmt(pi.tab) : '—', { size: 8, color: MUTED, align: 'right' });
+    var dl = pdfWrap(pi.desc || '—', true, 7.5, cols[6].w - 4); dl.forEach(function(l, li){ doc.text(colX(6)+cols[6].w/2, b + li*9, l, { size: 7.5, bold: true, color: RED, align: 'center' }); });
+    doc.text(colX(7)+cols[7].w-PAD, b, fmt(e.unit), { size: 8.5, bold: true, align: 'right' });
+    doc.text(colX(8)+cols[8].w-PAD, b, fmt(r2(e.qty*e.unit)), { size: 8.5, bold: true, align: 'right' });
     y += rowH; doc.line(M, y, M+CW, y, LINE, 0.5); tq += e.qty;
   });
   var obs = p.obs ? pdfWrap(p.obs, false, 9, CW - 20) : [];
