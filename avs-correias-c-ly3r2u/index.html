@@ -1912,7 +1912,7 @@
     var need = 76 + (obsLines.length ? obsLines.length * 12 + 34 : 0) + 70;
     if (y + need > BOTTOM) { doc.addPage(); y = M; }
     y += 10;
-    var tw = 240;
+    var tw = 215;
     doc.rect(W - M - tw, y, tw, 66, SOFT, LINE, 0.8);
     doc.text(W - M - tw + 10, y + 14, o.entries.length + (o.entries.length === 1 ? ' item' : ' itens') + ' · ' + totalQty + ' peças', { size: 8, color: MUTED });
     doc.text(W - M - tw + 10, y + 27, 'Total pela tabela', { size: 8, color: MUTED });
