@@ -1858,7 +1858,7 @@
       lines.forEach(function(l, li){ doc.text(colX(3) + PAD, dy + li*9.5, l, { size: 7.8 }); });
       doc.text(colX(4) + cols[4].w - PAD, base, String(e.qty), { size: 8, bold: true, align: 'right' });
       doc.text(colX(5) + cols[5].w - PAD, base, fmtN(tab), { size: 7.8, color: MUTED, align: 'right' });
-      doc.text(colX(6) + cols[6].w - PAD, base, pct.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%', { size: 7.8, bold: true, color: RED, align: 'right' });
+      doc.text(colX(6) + cols[6].w - PAD, base, (pct > 0 ? '10% + 5%' : '—'), { size: 7.8, bold: true, color: RED, align: 'right' });
       doc.text(colX(7) + cols[7].w - PAD, base, fmtN(e.unit), { size: 7.8, align: 'right' });
       doc.text(colX(8) + cols[8].w - PAD, base, fmtN(e.qty * e.unit), { size: 8, bold: true, align: 'right' });
       y += rowH;
