@@ -334,7 +334,7 @@ function telaEditor(){
       '<div class="totbar"><span>Total</span><span id="eTot">' + fmt(totalItens(p.itens)) + '</span></div></div>' +
     (orig && !ED.novo ? '<div class="row" style="margin-top:12px"><button class="btn sm" id="eOrig">Ver o que o cliente enviou' + (r2(orig.total) !== totalItens(p.itens) ? ' (total original ' + fmt(orig.total) + ')' : '') + '</button>' +
       '<button class="btn sm" id="eHist">Histórico de alterações</button></div>' : '');
-  var acoes = '<button class="btn" id="ePdf">Gerar espelho PDF</button>' + (c.phone ? '<button class="btn" id="eWa">WhatsApp do cliente</button>' : '') + '<button class="btn pri" id="eSalvar">' + (ED.novo ? 'Salvar pedido' : 'Salvar alterações') + '</button>';
+  var acoes = '<button class="btn" id="ePdf">Gerar espelho PDF</button><button class="btn" id="eMail">✉ Enviar por e-mail</button><button class="btn wa" id="eWa">Enviar por WhatsApp</button><button class="btn pri" id="eSalvar">' + (ED.novo ? 'Salvar pedido' : 'Salvar alterações') + '</button>';
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
@@ -347,10 +347,10 @@ function telaEditor(){
   prepararFotos(ED.p);
   document.getElementById('ePdf').onclick = function(){
     var pp = ED.p;
-    if (fotosProntas(pp)) gerarEspelho(pp);
-    else { toast('Preparando fotos do PDF…'); prepararFotos(pp).then(function(){ gerarEspelho(pp); }); }
+    comFotos(pp, function(){ gerarEspelho(pp); });
   };
-  var wa = document.getElementById('eWa'); if (wa) wa.onclick = function(){ var n = soNum(ED.p.cliente.phone); if (n.length <= 11) n = '55' + n; window.open('https://wa.me/' + n, '_blank'); };
+  document.getElementById('eMail').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } telaEmail(ED.p); };
+  document.getElementById('eWa').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } comFotos(ED.p, function(){ enviarWhatsApp(ED.p); }); };
   var bo = document.getElementById('eOrig'); if (bo) bo.onclick = verOriginal;
   var bh = document.getElementById('eHist'); if (bh) bh.onclick = verHistorico;
   ligarItens(travado);
@@ -845,10 +845,12 @@ function fotoJpeg(url){
 }
 function fotosDoPedido(p){ return (p.itens || []).map(function(e){ var u = imgDe(p.grupo, e.cod); return u === 'company.png' ? null : u; }); }
 function fotosProntas(p){ return fotosDoPedido(p).every(function(u){ return !u || FOTOS[u] !== undefined; }); }
+function comFotos(p, fn){ if (fotosProntas(p)) fn(); else { toast('Preparando fotos do PDF…'); prepararFotos(p).then(fn); } }
 function prepararFotos(p){ return Promise.all(fotosDoPedido(p).map(function(u){ return u ? fotoJpeg(u) : null; })); }
 
 /* ----- PDF espelho ----- */
-function gerarEspelho(p){
+function montarPdf(p, modo){
+  var fab = modo === 'fabrica';
   var tot = totalItens(p.itens);
   var RED = '#b8821e', DARK = '#1b1b1d', MUTED = '#6c6c70', LINE = '#dcd9d3', SOFT = '#f6f5f2';
   var doc = new PdfDoc(), M = 36, W = doc.W, CW = W - 2*M, BOTTOM = doc.H - 58, d = new Date();
@@ -859,8 +861,8 @@ function gerarEspelho(p){
   doc.text(W - M, M + 10, (g ? g.nome : p.grupo).toUpperCase(), { size: 12, bold: true, color: RED, align: 'right' });
   doc.text(W - M, M + 24, 'Política: ' + politicaNome(p.grupo, p.politica), { size: 8.5, color: MUTED, align: 'right' });
   var y = 104;
-  doc.text(M, y, 'ESPELHO DO PEDIDO', { size: 18, bold: true, color: RED });
-  doc.text(M, y + 14, 'Para conferência e aprovação do cliente · ' + (STATUS_NOME[p.status] || p.status), { size: 8.5, color: MUTED });
+  doc.text(M, y, fab ? 'PEDIDO DE VENDA' : 'ESPELHO DO PEDIDO', { size: 18, bold: true, color: RED });
+  doc.text(M, y + 14, fab ? 'Pedido enviado pela Company Representações' : 'Para conferência e aprovação do cliente · ' + (STATUS_NOME[p.status] || p.status), { size: 8.5, color: MUTED });
   doc.text(W - M, y - 2, 'Nº ' + p.numero, { size: 11, bold: true, align: 'right' });
   doc.text(W - M, y + 12, 'Emitido em ' + dateStr, { size: 8.5, color: MUTED, align: 'right' });
   y += 24; doc.rect(M, y, CW, 2, RED); y += 12;
@@ -887,7 +889,7 @@ function gerarEspelho(p){
   p.itens.forEach(function(e, idx){
     var desc = e.desc + (e.label ? ' — ' + e.label : '') + (e.marca ? ' (' + e.marca + ')' : '');
     var lines = pdfWrap(desc, false, 8.5, cols[3].w - 2*PAD), rowH = Math.max(44, lines.length*10.5 + 8);
-    if (y + rowH > BOTTOM){ doc.addPage(); y = M; doc.text(M, y+8, 'Espelho ' + p.numero + ' · ' + (c.name||'') + ' (continuação)', { size: 8.5, bold: true, color: MUTED }); y += 18; head(); }
+    if (y + rowH > BOTTOM){ doc.addPage(); y = M; doc.text(M, y+8, (fab ? 'Pedido ' : 'Espelho ') + p.numero + ' · ' + (c.name||'') + ' (continuação)', { size: 8.5, bold: true, color: MUTED }); y += 18; head(); }
     if (idx % 2) doc.rect(M, y, CW, rowH, SOFT);
     var b = y + 12;
     doc.text(colX(0)+cols[0].w/2, b, String(idx+1), { size: 8.5, color: MUTED, align: 'center' });
@@ -921,13 +923,23 @@ function gerarEspelho(p){
   doc.text(M+sw+40+sw/2, y+11, 'Company Representações', { size: 8, color: MUTED, align: 'center' });
   var np = doc.pages.length;
   doc.pages.forEach(function(ops, i){ doc.ops = ops; doc.line(M, doc.H-40, W-M, doc.H-40, LINE, 0.6);
-    doc.text(M, doc.H-28, 'Espelho sujeito a confirmação de estoque e aprovação da fábrica.', { size: 7, color: MUTED });
+    doc.text(M, doc.H-28, fab ? 'Company Representações · ' + (CFG.vendedores[p.vendedor_codigo] || '') + ' ' + (CFG.fones[p.vendedor_codigo] || '') : 'Espelho sujeito a confirmação de estoque e aprovação da fábrica.', { size: 7, color: MUTED });
     doc.text(W-M, doc.H-28, 'Página ' + (i+1) + ' de ' + np, { size: 7, color: MUTED, align: 'right' }); });
   var bytes = doc.output();
-  var nome = 'espelho-' + p.numero + '-' + String(c.name||'cliente').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') + '.pdf';
+  var nome = (fab ? 'pedido-' : 'espelho-') + p.numero + '-' + String(c.name||'cliente').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') + '.pdf';
   var file = null; try { file = new File([bytes], nome, { type: 'application/pdf' }); } catch(e){}
-  var mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  if (mobile && file && navigator.canShare && navigator.canShare({ files: [file] })){
+  return { bytes: bytes, nome: nome, file: file };
+}
+function ehCelular(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1); }
+function podeCompartilhar(file){ return !!(ehCelular() && file && navigator.canShare && navigator.canShare({ files: [file] })); }
+function baixarPdf(r){
+  var url = URL.createObjectURL(new Blob([r.bytes], { type: 'application/pdf' }));
+  var a = document.createElement('a'); a.href = url; a.download = r.nome; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+function gerarEspelho(p){
+  var r = montarPdf(p), bytes = r.bytes, nome = r.nome, file = r.file;
+  if (podeCompartilhar(file)){
     navigator.share({ files: [file], title: 'Espelho ' + p.numero, text: 'Segue o espelho do pedido ' + p.numero + ' para sua aprovação.' }).catch(function(){});
   } else {
     var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
@@ -938,6 +950,89 @@ function gerarEspelho(p){
   if (p.status === 'recebido' || p.status === 'em_revisao'){
     if (confirm('Marcar o pedido como “Espelho enviado” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
   }
+}
+
+/* ----- enviar por WhatsApp (espelho em PDF para o cliente) ----- */
+function foneWa(f){ var n = soNum(f); if (!n) return ''; if (n.length <= 11) n = '55' + n; return n; }
+function enviarWhatsApp(p){
+  var r = montarPdf(p), c = p.cliente || {}, n = foneWa(c.phone);
+  var texto = 'Olá! Segue o espelho do pedido ' + p.numero + ' (' + fmt(totalItens(p.itens)) + ') para sua aprovação.';
+  if (podeCompartilhar(r.file)){
+    navigator.share({ files: [r.file], title: 'Pedido ' + p.numero, text: texto }).catch(function(){});
+  } else {
+    baixarPdf(r);
+    window.open('https://wa.me/' + n + '?text=' + encodeURIComponent(texto + '\n(PDF em anexo)'), '_blank');
+    modal('Enviar por WhatsApp', '<p>O PDF <b>' + esc(r.nome) + '</b> foi salvo em <b>Downloads</b> e o WhatsApp' + (n ? ' do cliente' : '') + ' foi aberto em outra aba.</p>' +
+      '<p>Na conversa, clique no <b>clipe 📎</b> → <b>Documento</b> e escolha o PDF para anexar.</p>');
+  }
+  if (p.status === 'recebido' || p.status === 'em_revisao'){
+    if (confirm('Marcar o pedido como “Espelho enviado” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
+  }
+}
+
+/* ----- enviar por e-mail (pedido em PDF para a indústria) ----- */
+function clienteDoPedido(p){
+  var c = p.cliente || {}, d = soNum(c.doc);
+  return S.clientes.find(function(x){ return (d && soNum(x.doc) === d) || (c.name && x.nome === c.name); }) || null;
+}
+function jaEnviado(p){ return p.status === 'enviado_fabrica' || p.status === 'faturado'; }
+function emailsLista(t){ return String(t||'').split(/[,;\s]+/).map(function(x){ return x.trim(); }).filter(Boolean); }
+function telaEmail(p){
+  var c = p.cliente || {}, cad = clienteDoPedido(p), g = grupo(p.grupo);
+  var ind = lsGet('cv_emails_ind', {});
+  function destPadrao(gid){
+    var l = emailsLista(ind[gid]); if (cad && cad.email && l.indexOf(cad.email) < 0) l.push(cad.email);
+    return l.join(',');
+  }
+  function assunto(gid){ var gg = grupo(gid); return 'Pedido Nº ' + p.numero + ' - ' + (gg ? gg.nome : gid); }
+  var tot = totalItens(p.itens);
+  var m = modal('Pedidos · Enviar por e-mail',
+    '<div style="overflow:auto"><table class="tb"><thead><tr><th>Pedido</th><th>Nome fantasia (cliente)</th><th>Razão social (cliente)</th><th>Indústria</th><th class="r">Valor líquido (R$)</th><th class="r">Valor total (R$)</th><th>Já enviado?</th></tr></thead>' +
+    '<tbody><tr><td><b>' + esc(p.numero) + '</b></td><td>' + esc(cad && cad.fantasia || '—') + '</td><td>' + esc(c.name || '—') + '</td><td id="mInd">' + esc(g ? g.nome : p.grupo) + '</td>' +
+    '<td class="r">' + fmt(tot).replace('R$ ', '') + '</td><td class="r">' + fmt(tot).replace('R$ ', '') + '</td><td>' + (jaEnviado(p) ? 'Sim' : 'Não') + '</td></tr></tbody></table></div>' +
+    '<h3 style="margin:18px 0 4px;font-size:16px">Informações para envio</h3>' +
+    '<label class="lb">Cliente</label><input class="in" value="' + esc(c.name) + '" disabled>' +
+    '<label class="lb">Indústria</label><select class="in" id="mG">' + S.cat.grupos.map(function(x){ return '<option value="' + x.id + '"' + (x.id === p.grupo ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select>' +
+    '<label class="lb">Destinatário(s) *</label><textarea class="in" id="mPara" rows="2" placeholder="pedidos@fabrica.com.br, cliente@email.com">' + esc(destPadrao(p.grupo)) + '</textarea>' +
+    '<div class="muted" style="font-size:12px;margin-top:3px">Adicione vários e-mails separados por vírgula. Os e-mails da indústria ficam guardados para os próximos pedidos.</div>' +
+    '<label class="lb">Assunto do e-mail *</label><input class="in" id="mAss" value="' + esc(assunto(p.grupo)) + '">' +
+    '<label class="lb">Mensagem</label><textarea class="in" id="mMsg" rows="5">Olá,\n\nSegue em anexo o pedido Nº ' + esc(p.numero) + ' do cliente ' + esc(c.name || '') + ' (' + esc(fmt(tot)) + ').\n\nAtenciosamente,\n' + esc(CFG.vendedores[p.vendedor_codigo] || '') + ' · Company Representações\n' + esc(CFG.fones[p.vendedor_codigo] || '') + '</textarea>' +
+    (ehCelular() ? '' : '<label class="lb">Enviar pelo</label><select class="in" id="mVia"><option value="gmail"' + (lsGet('cv_email_via','gmail') === 'gmail' ? ' selected' : '') + '>Gmail (no navegador)</option><option value="app"' + (lsGet('cv_email_via','gmail') === 'app' ? ' selected' : '') + '>Programa de e-mail do computador (Outlook etc.)</option></select>') +
+    '<div class="row" style="margin-top:16px;gap:8px;flex-wrap:wrap"><button class="btn pri" id="mEnv">✉ Enviar</button><button class="btn" id="mEnvNovo">✉ Enviar e novo pedido</button><span class="muted">ou</span><button class="btn sm" id="mCanc">Cancelar</button></div>');
+  var el = function(id){ return m.body.querySelector('#' + id); };
+  el('mG').onchange = function(){ var gid = this.value, gg = grupo(gid); el('mPara').value = destPadrao(gid); el('mAss').value = assunto(gid); el('mInd').textContent = gg ? gg.nome : gid; };
+  el('mCanc').onclick = function(){ m.ov.remove(); document.body.style.overflow = ''; };
+  function enviar(novo){
+    var para = emailsLista(el('mPara').value), ass = el('mAss').value.trim(), msg = el('mMsg').value, gid = el('mG').value;
+    if (!para.length){ toast('Informe pelo menos um destinatário.'); return; }
+    var ruim = para.filter(function(x){ return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); });
+    if (ruim.length){ toast('E-mail inválido: ' + ruim.join(', ')); return; }
+    if (!ass){ toast('Informe o assunto do e-mail.'); return; }
+    // guarda os e-mails da indústria (sem o do cliente) para os próximos pedidos
+    var semCli = para.filter(function(x){ return !(cad && cad.email && x.toLowerCase() === String(cad.email).toLowerCase()); });
+    ind[gid] = semCli.join(','); lsSet('cv_emails_ind', ind);
+    var via = el('mVia') ? el('mVia').value : 'app'; lsSet('cv_email_via', via);
+    var r = montarPdf(p, 'fabrica');
+    if (podeCompartilhar(r.file)){
+      // celular: abre a lista de apps (escolha Gmail/Outlook) com o PDF anexado; os destinatários vão copiados
+      try { navigator.clipboard && navigator.clipboard.writeText(para.join(', ')); } catch(e){}
+      navigator.share({ files: [r.file], title: ass, text: msg }).catch(function(){});
+      toast('Escolha o Gmail ou Outlook. Os destinatários foram copiados: cole no campo “Para”.', 6000);
+    } else {
+      baixarPdf(r);
+      var corpo = msg + '\n\n[Anexe o arquivo ' + r.nome + ', que está na pasta Downloads]';
+      var url = via === 'gmail'
+        ? 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(para.join(',')) + '&su=' + encodeURIComponent(ass) + '&body=' + encodeURIComponent(corpo)
+        : 'mailto:' + para.join(',') + '?subject=' + encodeURIComponent(ass) + '&body=' + encodeURIComponent(corpo);
+      if (via === 'gmail') window.open(url, '_blank'); else location.href = url;
+      toast('E-mail aberto com destinatários e assunto. Anexe o PDF ' + r.nome + ' (pasta Downloads) e clique em Enviar.', 8000);
+    }
+    m.ov.remove(); document.body.style.overflow = '';
+    if (!jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado à fábrica” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
+    if (novo) setTimeout(function(){ location.hash = '#novo'; }, 300);
+  }
+  el('mEnv').onclick = function(){ enviar(false); };
+  el('mEnvNovo').onclick = function(){ enviar(true); };
 }
 
 /* ---------- roteador ---------- */
