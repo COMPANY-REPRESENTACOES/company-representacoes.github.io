@@ -500,18 +500,19 @@ function telaNovo(arg){
   var pre = arg ? S.clientes.find(function(c){ return c.id === arg; }) : null;
   var vend = souAdmin() ? Object.keys(CFG.vendedores) : [S.perfil.codigo];
   var html = '<h1>Novo pedido</h1><div class="card pad">' +
-    '<label class="lb">Representada</label><div class="chips" id="nG">' + S.cat.grupos.map(function(g, i){ return '<button class="chip" data-g="' + g.id + '" aria-pressed="' + (i === 0) + '">' + esc(g.nome) + '</button>'; }).join('') + '</div>' +
+    '<label class="lb">Representada</label><select class="in" id="nG"><option value="">Selecione</option>' + S.cat.grupos.slice().sort(function(a, b){ return a.nome.localeCompare(b.nome, 'pt-BR'); }).map(function(g){ return '<option value="' + g.id + '">' + esc(g.nome) + '</option>'; }).join('') + '</select>' +
     '<label class="lb">Política de preço</label><select class="in" id="nPol"></select>' +
     (vend.length > 1 ? '<label class="lb">Vendedor</label><select class="in" id="nVend">' + vend.map(function(k){ return '<option value="' + k + '">' + esc(CFG.vendedores[k]) + '</option>'; }).join('') + '</select>' : '') +
     '<label class="lb">Cliente</label><input class="in" id="nCli" list="cliL" placeholder="Digite o nome ou CNPJ de um cliente cadastrado, ou um cliente novo" value="' + esc(pre ? pre.nome : '') + '">' +
     '<datalist id="cliL">' + S.clientes.map(function(c){ return '<option value="' + esc(c.nome) + '">' + esc((c.doc||'') + ' ' + (c.cidade||'')) + '</option>'; }).join('') + '</datalist>' +
     '<button class="btn pri" style="margin-top:14px;width:100%" id="nGo">Continuar → escolher produtos</button></div>';
   casca(html);
-  var gsel = S.cat.grupos[0].id;
-  function pols(){ var g = grupo(gsel); document.getElementById('nPol').innerHTML = g.politicas.map(function(x){ return '<option value="' + x.id + '">' + esc(x.nome) + '</option>'; }).join(''); }
+  var gsel = '';
+  function pols(){ var g = grupo(gsel), el = document.getElementById('nPol'); if (!g){ el.innerHTML = '<option value="">Escolha a representada</option>'; el.disabled = true; return; } el.disabled = false; el.innerHTML = g.politicas.map(function(x){ return '<option value="' + x.id + '">' + esc(x.nome) + '</option>'; }).join(''); }
   pols();
-  $app.querySelectorAll('[data-g]').forEach(function(b){ b.onclick = function(){ gsel = b.dataset.g; $app.querySelectorAll('[data-g]').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); pols(); }; });
+  document.getElementById('nG').onchange = function(){ gsel = this.value; pols(); };
   document.getElementById('nGo').onclick = function(){
+    if (!gsel){ toast('Selecione a representada.'); document.getElementById('nG').focus(); return; }
     var nome = document.getElementById('nCli').value.trim();
     var c = S.clientes.find(function(x){ return x.nome === nome || (x.fantasia && x.fantasia === nome) || (x.doc && soNum(x.doc) === soNum(nome)) || (x.codigo && String(x.codigo) === nome); });
     var g = grupo(gsel), pid = document.getElementById('nPol').value, d = new Date();
