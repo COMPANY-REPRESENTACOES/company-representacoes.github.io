@@ -733,6 +733,9 @@
     resize:vertical;
   }
   .field-row{display:flex;gap:10px;}
+  .field .req{color:#d0121b;font-weight:800;}
+  .field input.invalid{border-color:#d0121b !important;box-shadow:0 0 0 3px rgba(208,18,27,.15);background:#fff6f6;}
+  .req-msg{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff1f1;border:1px solid #f3b4b7;color:#a30d15;font-size:13px;font-weight:600;}
   .field-row .field{flex:1;min-width:0;}
   .sheet-actions{
     display:flex;gap:10px;margin-top:16px;
@@ -941,8 +944,8 @@
       <b id="sheetTotal">R$ 0,00</b>
     </div>
     <div class="field">
-      <label for="clientName">Seu nome / empresa</label>
-      <input id="clientName" type="text" placeholder="Ex: João - Som&Cia">
+      <label for="clientName">Nome da empresa <span class="req">*</span></label>
+      <input id="clientName" type="text" placeholder="Ex: Som&Cia Instrumentos Musicais" required>
     </div>
     <div class="field-row">
       <div class="field">
@@ -959,9 +962,14 @@
       <input id="clientCity" type="text" placeholder="Ex: Cuiabá / MT">
     </div>
     <div class="field">
-      <label for="clientCarrier">Transportadora</label>
-      <input id="clientCarrier" type="text">
+      <label for="clientCarrier">Transportadora <span class="req">*</span></label>
+      <input id="clientCarrier" type="text" required>
     </div>
+    <div class="field">
+      <label for="clientTerm">Prazo (definido pelo representante)</label>
+      <input id="clientTerm" type="text" placeholder="Ex: 30/60/90 dias">
+    </div>
+    <div class="req-msg" id="reqMsg" hidden>Preencha os campos obrigatórios: <b id="reqList"></b></div>
     <div class="field">
       <label for="clientObs">Observação (opcional)</label>
       <textarea id="clientObs" rows="2"></textarea>
@@ -1421,6 +1429,7 @@
     var cdoc = document.getElementById('clientDoc').value.trim();
     var phone = document.getElementById('clientPhone').value.trim();
     var city = document.getElementById('clientCity').value.trim();
+    var term = document.getElementById('clientTerm').value.trim();
     var total = entries.reduce(function(s,e){ return s+e.qty*e.unit; }, 0);
     var b = forWhats ? '*' : '';
 
@@ -1439,15 +1448,43 @@
     lines.push('');
     lines.push(b + 'Total: ' + fmt(total) + b);
     if (carrier) lines.push('Transportadora: ' + carrier);
+    if (term) lines.push('Prazo: ' + term);
     if (obs) { lines.push(''); lines.push('Obs: ' + obs); }
-    return { lines: lines, entries: entries, name: name, carrier: carrier, obs: obs, doc: cdoc, phone: phone, city: city, total: total };
+    return { lines: lines, entries: entries, name: name, carrier: carrier, obs: obs, doc: cdoc, phone: phone, city: city, term: term, total: total };
   }
 
   var thanksOverlay = document.getElementById('thanksOverlay');
 
+  function checkRequired(){
+    var req = [['clientName','Nome da empresa'],['clientCarrier','Transportadora']], miss = [], first = null;
+    req.forEach(function(r){
+      var el = document.getElementById(r[0]);
+      var bad = !el.value.trim();
+      el.classList.toggle('invalid', bad);
+      if (bad){ miss.push(r[1]); if (!first) first = el; }
+    });
+    var msg = document.getElementById('reqMsg');
+    if (miss.length){
+      document.getElementById('reqList').textContent = miss.join(' e ');
+      msg.hidden = false;
+      try { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e){}
+      try { first.focus({ preventScroll: true }); } catch(e){ first.focus(); }
+      return false;
+    }
+    msg.hidden = true;
+    return true;
+  }
+  ['clientName','clientCarrier'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', function(){
+      if (this.value.trim()) this.classList.remove('invalid');
+      if (document.getElementById('clientName').value.trim() && document.getElementById('clientCarrier').value.trim()) document.getElementById('reqMsg').hidden = true;
+    });
+  });
+
   function makeOrderPdf(forWhats){
     var o = buildOrderLines(forWhats);
     if (o.entries.length === 0) return null;
+    if (!checkRequired()) return null;
     o.date = new Date();
     var pdf = buildOrderPdf(o);
     var safeName = (o.name || 'cliente').toLowerCase()
@@ -1781,7 +1818,7 @@
       var lines = pdfWrap(v, true, 9.5, w);
       doc.text(x, yy + 12, lines[0] + (lines.length > 1 ? '…' : ''), { size: 9.5, bold: true, color: DARK });
     }
-    var boxH = 18 + 3*28 + 4;
+    var boxH = 18 + 4*28 + 4;
     doc.rect(M, y, CW, boxH, null, LINE, 0.8);
     doc.rect(M, y, CW, 18, SOFT);
     doc.line(M, y+18, M+CW, y+18, LINE, 0.8);
@@ -1794,7 +1831,10 @@
     field(fx + 2*colW, fy, 'Cidade / UF', o.city, colW - 10);
     fy += 28;
     field(fx, fy, 'Transportadora', o.carrier, colW - 10);
-    field(fx + colW, fy, 'Representante', 'Company Representações · (65) 99902-2436', 2*colW - 10);
+    doc.text(fx + colW, fy, 'PRAZO (DEFINIDO PELO REPRESENTANTE)', { size: 6.8, bold: true, color: RED });
+    doc.text(fx + colW, fy + 12, pdfWrap(o.term || 'A definir pelo representante', true, 9.5, 2*colW - 10)[0], { size: 9.5, bold: true, color: o.term ? RED : MUTED });
+    fy += 28;
+    field(fx, fy, 'Representante', 'Company Representações · (65) 99902-2436', 2*colW - 10);
     y += boxH + 16;
 
     // Tabela de itens (foto, preço de tabela, desconto, unitário c/ desconto e total)
