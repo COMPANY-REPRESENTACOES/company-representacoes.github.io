@@ -1,4 +1,7 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}  .field .req{color:#d0121b;font-weight:800;}
+  .field input.invalid{border-color:#d0121b !important;box-shadow:0 0 0 3px rgba(208,18,27,.15);background:#fff6f6;}
+  .req-msg{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff1f1;border:1px solid #f3b4b7;color:#a30d15;font-size:13px;font-weight:600;}
+</style></head><body>
 <!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta name="format-detection" content="telephone=no"><script>document.documentElement.className+=' js';</script><style>html.js #semjs{display:none!important}</style><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <meta charset="utf-8"><meta name="robots" content="noindex,nofollow">
 <title>PEDIDO EXPRESS COMPANY ( DYLAN CELEBRATE ) LOJAS OFICIAIS Clara</title>
@@ -1202,13 +1205,18 @@
       <b id="sheetTotal">R$ 0,00</b>
     </div>
     <div class="field">
-      <label for="clientName">Seu nome / empresa</label>
-      <input id="clientName" type="text" placeholder="Ex: João - Som&Cia">
+      <label for="clientName">Nome da empresa <span class="req">*</span></label>
+      <input id="clientName" type="text" required>
     </div>
     <div class="field">
-      <label for="clientCarrier">Transportadora</label>
-      <input id="clientCarrier" type="text">
+      <label for="clientCarrier">Transportadora <span class="req">*</span></label>
+      <input id="clientCarrier" type="text" required>
     </div>
+    <div class="field">
+      <label for="clientTerm">Prazo (definido pelo representante)</label>
+      <input id="clientTerm" type="text">
+    </div>
+    <div class="req-msg" id="reqMsg" hidden>Preencha os campos obrigatórios: <b id="reqList"></b></div>
     <div class="field">
       <label for="clientObs">Observação (opcional)</label>
       <textarea id="clientObs" rows="2"></textarea>
@@ -1827,6 +1835,7 @@
   function makeOrderPdf(forWhats){
     var o = buildOrderLines(forWhats);
     if (o.entries.length === 0) return null;
+    if (!checkRequired()) return null;
     o.total = o.entries.reduce(function(s,e){ return s+e.qty*e.unit; }, 0);
     var pdf = buildOrderPdf(o);
     var safeName = (o.name || 'cliente').toLowerCase()
@@ -2084,6 +2093,46 @@
   }
   function n2(v){ return (Math.round(v * 100) / 100).toString(); }
 
+
+  /* ===== PADRÃO PEDIDO EXPRESS: Desc. % aplicado e campos obrigatórios ===== */
+  function pxR2(v){ return Math.round(v * 100) / 100; }
+  function pxPctStr(r){ var p = Math.round((1 - r) * 1000) / 10; return p.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%'; }
+  function pxLabel(unit, tab, comps){
+    if (!tab || !unit) return '—';
+    var r = unit / tab;
+    if (r > 0.995) return '—';
+    for (var i = 0; i < comps.length; i++){ if (Math.abs(r - comps[i][1]) < 0.004) return comps[i][0]; }
+    return pxPctStr(r);
+  }
+  function pxInfo(e){ var tab = e.it.orig || e.unit; return { tab: tab, label: pxLabel(e.unit, tab, [['12% + 10% + 15%',0.6732],['12% + 10%',0.792]]) }; }
+  function fmtN(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function checkRequired(){
+    var req = [['clientName','Nome da empresa'],['clientCarrier','Transportadora']], miss = [], first = null;
+    req.forEach(function(r){
+      var el = document.getElementById(r[0]); if (!el) return;
+      var bad = !el.value.trim(); el.classList.toggle('invalid', bad);
+      if (bad){ miss.push(r[1]); if (!first) first = el; }
+    });
+    var msg = document.getElementById('reqMsg');
+    if (miss.length){
+      if (msg){ document.getElementById('reqList').textContent = miss.join(' e '); msg.hidden = false; }
+      try { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(err){}
+      try { first.focus({ preventScroll: true }); } catch(err){ first.focus(); }
+      return false;
+    }
+    if (msg) msg.hidden = true;
+    return true;
+  }
+  ['clientName','clientCarrier'].forEach(function(id){
+    var el = document.getElementById(id); if (!el) return;
+    el.addEventListener('input', function(){
+      if (this.value.trim()) this.classList.remove('invalid');
+      var a = document.getElementById('clientName'), b = document.getElementById('clientCarrier'), m = document.getElementById('reqMsg');
+      if (m && a && b && a.value.trim() && b.value.trim()) m.hidden = true;
+    });
+  });
+  function pxTerm(){ var el = document.getElementById('clientTerm'); return el ? el.value.trim() : ''; }
+
   function buildOrderPdf(o){
     var PW = 595.28, PH = 841.89, M = 36;
     var pages = [], images = [], ops = null, y = 0;
@@ -2119,17 +2168,20 @@
       ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 
     // colunas
-    var cFoto = M, cDesc = M + 52, cQtd = PW - M - 175, cUnit = PW - M - 85, cTot = PW - M;
-    var descW = cQtd - 40 - cDesc;
+    var cFoto = M, cDesc = M + 52, cTot = PW - M, cUnit = cTot - 66, cPct = cUnit - 58, cTab = cPct - 64, cQtd = cTab - 74;
+    var descW = cQtd - 18 - cDesc;
 
     function tableHeader(){
-      rect(M, y, PW - 2*M, 18, [0.93,0.93,0.94]);
-      text('FOTO', cFoto + 6, y + 12.5, 7.5, true, [0.35,0.35,0.38]);
-      text('CÓDIGO / DESCRIÇÃO', cDesc, y + 12.5, 7.5, true, [0.35,0.35,0.38]);
-      text('QTD', cQtd, y + 12.5, 7.5, true, [0.35,0.35,0.38], 'center');
-      text('UNITÁRIO', cUnit, y + 12.5, 7.5, true, [0.35,0.35,0.38], 'right');
-      text('TOTAL', cTot - 4, y + 12.5, 7.5, true, [0.35,0.35,0.38], 'right');
-      y += 22;
+      var G = [0.35,0.35,0.38];
+      rect(M, y, PW - 2*M, 24, [0.93,0.93,0.94]);
+      text('FOTO', cFoto + 6, y + 15, 7.5, true, G);
+      text('CÓDIGO / DESCRIÇÃO', cDesc, y + 15, 7.5, true, G);
+      text('QTD', cQtd, y + 15, 7.5, true, G, 'center');
+      text('R$', cTab, y + 10, 7, true, G, 'right'); text('TABELA', cTab, y + 19, 7, true, G, 'right');
+      text('DESC. %', cPct, y + 10, 7, true, G, 'right'); text('APLICADO', cPct, y + 19, 7, true, G, 'right');
+      text('R$ UNIT.', cUnit, y + 10, 7, true, G, 'right'); text('C/ DESC.', cUnit, y + 19, 7, true, G, 'right');
+      text('R$', cTot - 4, y + 10, 7, true, G, 'right'); text('TOTAL', cTot - 4, y + 19, 7, true, G, 'right');
+      y += 28;
     }
 
     newPage();
@@ -2150,11 +2202,12 @@
     }
     infoRow('Cliente', name || '(não informado)');
     infoRow('Transportadora', carrier);
+    infoRow('Prazo', pxTerm() || 'A definir pelo representante');
     infoRow('Representante', repLine);
     y += 8;
     tableHeader();
 
-    var totalQty = 0, total = 0;
+    var totalQty = 0, total = 0, totalTab = 0;
     o.entries.forEach(function(e){
       var lineTotal = e.qty * e.unit;
       totalQty += e.qty; total += lineTotal;
@@ -2175,20 +2228,27 @@
       else rect(cFoto + 2, y + 4, 40, 40, [0.95,0.95,0.96]);
       lines.forEach(function(l, i){ text(l.t, cDesc, y + 14 + i*lh, l.s, l.b, l.c); });
       text(String(e.qty), cQtd, y + 14, 10, true, null, 'center');
-      text(fmt(e.unit), cUnit, y + 14, 9, false, null, 'right');
-      text(fmt(lineTotal), cTot - 4, y + 14, 9.5, true, null, 'right');
+      var inf = pxInfo(e); totalTab += e.qty * (inf.tab || e.unit);
+      text(fmtN(inf.tab || e.unit), cTab, y + 14, 8.5, false, [0.42,0.42,0.45], 'right');
+      wrapText(inf.label, 7.5, true, 56).forEach(function(l, li){ text(l, cPct, y + 14 + li*9.5, 7.5, true, ACC, 'right'); });
+      text(fmtN(e.unit), cUnit, y + 14, 8.5, false, null, 'right');
+      text(fmtN(lineTotal), cTot - 4, y + 14, 9, true, null, 'right');
       y += rowH;
       line(M, y, PW - M, y, [0.85,0.85,0.87], 0.5);
     });
 
     // totais
-    if (y + 70 > PH - M - 30) newPage();
+    if (y + 96 > PH - M - 30) newPage();
     y += 14;
-    rect(PW - M - 230, y, 230, 46, [0.96,0.97,1]);
-    text('Total de peças: ' + totalQty, PW - M - 220, y + 17, 9, false, [0.35,0.35,0.38]);
-    text('TOTAL DO PEDIDO', PW - M - 220, y + 36, 10, true, ACC);
-    text(fmt(total), PW - M - 10, y + 36, 14, true, ACC, 'right');
-    y += 62;
+    rect(PW - M - 230, y, 230, 72, [0.96,0.97,1]);
+    text('Total de peças: ' + totalQty, PW - M - 220, y + 15, 8.5, false, [0.35,0.35,0.38]);
+    text('Total pela tabela', PW - M - 220, y + 28, 8.5, false, [0.35,0.35,0.38]);
+    text(fmt(totalTab), PW - M - 10, y + 28, 8.5, false, [0.35,0.35,0.38], 'right');
+    text('Desconto aplicado', PW - M - 220, y + 41, 8.5, false, [0.35,0.35,0.38]);
+    text('- ' + fmt(Math.max(0, totalTab - total)), PW - M - 10, y + 41, 8.5, false, [0.35,0.35,0.38], 'right');
+    text('TOTAL DO PEDIDO', PW - M - 220, y + 62, 10, true, ACC);
+    text(fmt(total), PW - M - 10, y + 62, 14, true, ACC, 'right');
+    y += 88;
 
     if (obs){
       var ol = wrapText(obs, 9.5, false, PW - 2*M);
