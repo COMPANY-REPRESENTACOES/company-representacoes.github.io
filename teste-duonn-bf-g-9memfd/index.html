@@ -2225,4 +2225,77 @@
 </script>
 
 </body></html>
+<!-- PX-CATS-WRAP: categorias em linhas (sem rolar para o lado) + botão Ver todas -->
+<style id="pxCatsWrapCss">
+.cat-row,.rx-cats,.category-row,.cat-wrap,
+.topbar.compact .cat-row,.topbar.compact .rx-cats,.topbar.compact .category-row,.topbar.compact .cat-wrap{flex-wrap:wrap!important;overflow-x:visible!important;-webkit-overflow-scrolling:auto}
+.pxc-clip{overflow:hidden!important}
+.pxc-open{max-height:60vh!important;overflow-y:auto!important}
+.topbar:not(.compact) .pxc-open{max-height:none!important;overflow-y:visible!important}
+.pxc-tog{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:6px 0 0;padding:8px 12px;border:1.5px dashed currentColor;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:700;letter-spacing:.02em;cursor:pointer;opacity:.9}
+.pxc-tog[hidden]{display:none!important}
+#topbar.compact > .pxc-tog:not([hidden]),.topbar.compact > .pxc-tog.pxc-tog.pxc-tog.pxc-tog.pxc-tog:not([hidden]){display:flex!important;margin-top:4px;padding:5px 10px;font-size:12px}
+</style>
+<script>
+(function(){
+  if (window.__pxCatsWrap) return; window.__pxCatsWrap = 1;
+  var SEL = '.cat-row,.rx-cats,.category-row,.cat-wrap';
+  function rowsInfo(el){
+    var kids = [];
+    (function walk(n){ Array.prototype.forEach.call(n.children, function(k){ if (k.classList.contains('pxc-tog')) return; var d = getComputedStyle(k).display; if (d === 'none') return; if (d === 'contents') walk(k); else kids.push(k); }); })(el);
+    var tops = [], first = {}, base = el.getBoundingClientRect().top;
+    kids.forEach(function(k){ var r = k.getBoundingClientRect(); if (!r.height) return; var t = Math.round(r.top - base); var hit = null; for (var i=0;i<tops.length;i++){ if (Math.abs(tops[i]-t) < 6){ hit = i; break; } } if (hit === null){ tops.push(t); first[tops.length-1] = r; } });
+    return {tops: tops, count: kids.length};
+  }
+  function setup(el){
+    if (el.__pxc) return; el.__pxc = 1;
+    var tb = el.closest('.topbar');
+    var tog = document.createElement('button'); tog.type = 'button'; tog.className = 'pxc-tog'; tog.hidden = true;
+    el.parentNode.insertBefore(tog, el.nextSibling);
+    function paint(){ var n = tb || document.body, bg = ''; while (n && n !== document.documentElement){ var c = getComputedStyle(n).backgroundColor; var m = c && c.match(/rgba?\(([^)]+)\)/); if (m){ var v = m[1].split(','); if (v.length < 4 || parseFloat(v[3]) > 0.05){ bg = 'rgb(' + v.slice(0,3).join(',') + ')'; break; } } n = n.parentElement; } tog.style.background = bg || getComputedStyle(document.body).backgroundColor; }
+    var open = false, busy = false;
+    function update(){
+      if (busy) return; busy = true;
+      el.classList.remove('pxc-clip'); el.style.maxHeight = '';
+      if (el.parentElement && el.parentElement.closest(SEL)){ el.classList.remove('pxc-open'); tog.hidden = true; busy = false; return; }
+      var hiddenEl = el.hidden || getComputedStyle(el).display === 'none';
+      if (hiddenEl){ tog.hidden = true; busy = false; return; }
+      var compact = tb && tb.classList.contains('compact');
+      var limit = compact ? 1 : 3;
+      var info = rowsInfo(el);
+      if (info.tops.length <= limit){ tog.hidden = true; el.classList.remove('pxc-open'); busy = false; return; }
+      tog.hidden = false; paint();
+      if (open){ el.classList.add('pxc-open'); tog.innerHTML = '&#9652; Mostrar menos'; }
+      else {
+        el.classList.remove('pxc-open'); el.classList.add('pxc-clip');
+        el.style.maxHeight = Math.max(30, info.tops[limit] - 2) + 'px';
+        tog.innerHTML = compact ? '&#9662; Ver todas as categorias' : '&#9662; Ver todas as categorias (' + info.count + ')';
+      }
+      busy = false;
+    }
+    tog.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); open = !open; update(); if (!open) el.scrollTop = 0; });
+    var BK = '[data-back],.sub-back,.back-chip';
+    el.addEventListener('click', function(e){
+      var wasSub = !!el.querySelector(BK), onBack = !!(e.target.closest && e.target.closest(BK));
+      setTimeout(function(){
+        var sub = !!el.querySelector(BK);
+        if (!(sub && (!wasSub || onBack)) && !(onBack)) open = false;
+        update();
+      }, 60);
+    });
+    var t = null; function later(){ clearTimeout(t); t = setTimeout(update, 40); }
+    new MutationObserver(later).observe(el, {childList: true, subtree: true, attributes: true, attributeFilter: ['hidden']});
+    if (tb) new MutationObserver(later).observe(tb, {attributes: true, attributeFilter: ['class']});
+    window.addEventListener('resize', later);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(later);
+    update();
+  }
+  function scan(){ Array.prototype.forEach.call(document.querySelectorAll(SEL), function(el){ if (el.closest('.topbar') && !(el.parentElement && el.parentElement.closest(SEL))) setup(el); }); }
+  var st = null; function scanLater(){ clearTimeout(st); st = setTimeout(scan, 80); }
+  function boot(){ scan(); var tbs = document.querySelectorAll('.topbar'); Array.prototype.forEach.call(tbs, function(t){ new MutationObserver(scanLater).observe(t, {childList: true, subtree: true}); }); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  window.addEventListener('load', scan);
+})();
+</script>
+<!-- /PX-CATS-WRAP -->
 </body></html>
