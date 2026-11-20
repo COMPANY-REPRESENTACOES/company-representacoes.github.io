@@ -1135,8 +1135,7 @@ function editarRep(r, nova){
       if (c[3] === 'link') return '<button type="button" class="btn" data-lk="' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></button>';
       return '<label class="btn" for="rUp_' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></label>' +
         '<input type="file" data-up="' + c[0] + '" id="rUp_' + c[0] + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden>'; }).join('') + '</div>' +
-    '<div class="row" style="margin-top:8px"><button type="button" class="btn" id="rLink">🔗 Adicionar link (arquivo grande / Google Drive)</button></div>' +
-    '<div class="muted" style="font-size:12.5px;margin-top:4px">Catálogos: coloque o arquivo no Google Drive, copie o link de compartilhamento e use “🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE”. Os outros anexos sobem direto (até 50 MB); maiores, use “Adicionar link”.</div>' +
+    '<div class="muted" style="font-size:12.5px;margin-top:4px">Catálogos: coloque o arquivo no Google Drive, copie o link de compartilhamento e use “🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE”. Os outros anexos sobem direto (até 50 MB).</div>' +
     '<div class="muted" id="rUpSt" style="font-size:13px;margin-top:6px"></div>' +
     REP_ANEXOS.map(function(c){ return '<div class="rep-grp" id="rG_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n" id="rN2_' + c[0] + '">0</span></div><div id="rArqs_' + c[0] + '"></div></div>'; }).join('');
   function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
@@ -1178,7 +1177,7 @@ function editarRep(r, nova){
     var n = fs.length; enviando += n; st.textContent = 'Enviando ' + n + ' arquivo(s)…';
     fs.forEach(function(file){
       var fim = function(){ enviando--; n--; st.textContent = n ? 'Enviando ' + n + ' arquivo(s)…' : 'Anexos prontos — lembre de salvar.'; };
-      if (file.size > 50 * 1024 * 1024){ toast(file.name + ' tem ' + Math.round(file.size/1048576) + ' MB (limite 50 MB). Coloque no Google Drive e use “🔗 Adicionar link”.', 7000); fim(); return; }
+      if (file.size > 50 * 1024 * 1024){ toast(file.name + ' tem ' + Math.round(file.size/1048576) + ' MB (limite 50 MB).', 7000); fim(); return; }
       subirArquivo(pasta, file).then(function(a){ d.anexos[cat].push(a); desenhaArqs(cat); }, function(e){ toast('Não foi possível enviar ' + file.name + ': ' + String(e.message||e).slice(0,120), 5000); }).then(fim);
     });
   }; });
@@ -1196,7 +1195,6 @@ function editarRep(r, nova){
       desenhaArqs(cat); m.ov.remove(); document.body.style.overflow = ''; el('rUpSt').textContent = 'Link adicionado — lembre de salvar.';
     };
   }
-  el('rLink').onclick = function(){ abrirLink(''); };
   $app.querySelectorAll('[data-lk]').forEach(function(b){ b.onclick = function(){ abrirLink(b.dataset.lk); }; });
   el('rSalvar').onclick = function(){
     var nome = el('rNome').value.trim();
