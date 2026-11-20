@@ -1055,6 +1055,7 @@ var REP_CONTATOS = [
 ];
 var REP_ANEXOS = [
   ['tabelas','Tabelas de preço','📎 ANEXAR TABELAS'],
+  ['catalogo','Catálogos','📎 ANEXAR CATÁLOGO'],
   ['oferta','⭐ Oferta do mês','📎 ANEXAR OFERTA DO MÊS'],
   ['politica','Política comercial','📎 ANEXAR POLÍTICA COMERCIAL'],
   ['geral','Anexos gerais','📎 ANEXOS GERAL']
