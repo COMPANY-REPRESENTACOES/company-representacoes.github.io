@@ -1079,7 +1079,7 @@ function arquivosHtml(arqs, editar){
   return '<div class="rep-arqs">' + arqs.map(function(a, i){
     var img = /^image\//.test(a.tipo || '') || /\.(jpe?g|png|webp|gif)$/i.test(a.nome || '');
     return '<div class="rep-arq">' + (img ? '<img src="' + esc(a.url) + '" alt="" data-zoom="' + esc(a.url) + '" data-leg="' + esc(a.nome) + '">' :
-      '<a class="rep-pdf" href="' + esc(a.url) + '" target="_blank" rel="noopener">' + (/\.(xlsx?|csv)$/i.test(a.nome||'') ? '📊' : '📄') + '<span>' + esc(a.nome || 'PDF') + '</span></a>') +
+      '<a class="rep-pdf" href="' + esc(a.url) + '" target="_blank" rel="noopener">' + (a.tipo === 'link' ? '🔗' : /\.(xlsx?|csv)$/i.test(a.nome||'') ? '📊' : '📄') + '<span>' + esc(a.nome || 'PDF') + '</span></a>') +
       (editar ? '<button type="button" class="btn sm bad" data-rmarq="' + i + '">Remover</button>' : '') + '</div>';
   }).join('') + '</div>';
 }
@@ -1134,6 +1134,8 @@ function editarRep(r, nova){
   var blocoAnexos = '<div class="rep-bts">' + REP_ANEXOS.map(function(c){
       return '<label class="btn" for="rUp_' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></label>' +
         '<input type="file" data-up="' + c[0] + '" id="rUp_' + c[0] + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden>'; }).join('') + '</div>' +
+    '<div class="row" style="margin-top:8px"><button type="button" class="btn" id="rLink">🔗 Adicionar link (arquivo grande / Google Drive)</button></div>' +
+    '<div class="muted" style="font-size:12.5px;margin-top:4px">Arquivos até 50 MB sobem direto. Maiores: coloque no Google Drive, copie o link de compartilhamento e use “Adicionar link”.</div>' +
     '<div class="muted" id="rUpSt" style="font-size:13px;margin-top:6px"></div>' +
     REP_ANEXOS.map(function(c){ return '<div class="rep-grp" id="rG_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n" id="rN2_' + c[0] + '">0</span></div><div id="rArqs_' + c[0] + '"></div></div>'; }).join('');
   function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
@@ -1175,10 +1177,24 @@ function editarRep(r, nova){
     var n = fs.length; enviando += n; st.textContent = 'Enviando ' + n + ' arquivo(s)…';
     fs.forEach(function(file){
       var fim = function(){ enviando--; n--; st.textContent = n ? 'Enviando ' + n + ' arquivo(s)…' : 'Anexos prontos — lembre de salvar.'; };
-      if (file.size > 20 * 1024 * 1024){ toast(file.name + ': arquivo maior que 20 MB'); fim(); return; }
+      if (file.size > 50 * 1024 * 1024){ toast(file.name + ' tem ' + Math.round(file.size/1048576) + ' MB (limite 50 MB). Coloque no Google Drive e use “🔗 Adicionar link”.', 7000); fim(); return; }
       subirArquivo(pasta, file).then(function(a){ d.anexos[cat].push(a); desenhaArqs(cat); }, function(e){ toast('Não foi possível enviar ' + file.name + ': ' + String(e.message||e).slice(0,120), 5000); }).then(fim);
     });
   }; });
+  el('rLink').onclick = function(){
+    var m = modal('Adicionar link',
+      '<label class="lb">Onde guardar</label><select class="in" id="lkCat">' + REP_ANEXOS.map(function(c){ return '<option value="' + c[0] + '">' + c[1].replace('⭐ ','') + '</option>'; }).join('') + '</select>' +
+      '<label class="lb">Nome do arquivo</label><input class="in" id="lkNome" placeholder="Ex.: Catálogo 2026, Tabela Novembro">' +
+      '<label class="lb">Link (Google Drive, Dropbox, OneDrive…)</label><input class="in" id="lkUrl" inputmode="url" placeholder="https://drive.google.com/…">' +
+      '<p class="muted" style="font-size:12.5px">No Google Drive: botão direito no arquivo → Compartilhar → Acesso geral: “Qualquer pessoa com o link” → Copiar link.</p>' +
+      '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn pri" id="lkOk">Adicionar</button></div>');
+    m.body.querySelector('#lkOk').onclick = function(){
+      var url = m.body.querySelector('#lkUrl').value.trim(), nome = m.body.querySelector('#lkNome').value.trim(), cat = m.body.querySelector('#lkCat').value;
+      if (!/^https?:\/\//i.test(url)){ toast('Cole um link começando com https://'); return; }
+      d.anexos[cat].push({ url: url, nome: nome || 'Link', tipo: 'link' });
+      desenhaArqs(cat); m.ov.remove(); document.body.style.overflow = ''; el('rUpSt').textContent = 'Link adicionado — lembre de salvar.';
+    };
+  };
   el('rSalvar').onclick = function(){
     var nome = el('rNome').value.trim();
     if (!nome){ toast('Informe o nome da representada.'); el('rNome').focus(); return; }
