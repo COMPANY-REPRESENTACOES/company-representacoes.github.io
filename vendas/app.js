@@ -154,7 +154,8 @@ function sincronizar(manual){
     return Promise.all([
       api('pedidos?select=*&order=criado_em.desc&limit=1000'),
       api('clientes?select=*&order=nome.asc&limit=5000'),
-      S.perfil ? null : carregarPerfil()
+      S.perfil ? null : carregarPerfil(),
+      api('representadas?select=*&order=nome.asc').then(function(r){ S.repErr = ''; return r; }, function(e){ if (e && e.auth) throw e; S.repErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'O banco ainda não tem a tabela de representadas (falta rodar a atualização do banco).' : ''; return null; })
     ]);
   }).then(function(res){
     var novos = {};
@@ -164,6 +165,7 @@ function sincronizar(manual){
     var cl = res[1] || [];
     S.cfila.forEach(function(cid){ var loc = S.clientes.find(function(x){ return x.id === cid; }); if (loc){ cl = cl.filter(function(x){ return x.id !== cid; }); cl.push(loc); } });
     S.clientes = cl;
+    if (res[3]){ S.reps = res[3]; kvSet('representadas', S.reps); }
     S.lastSync = new Date().toISOString(); lsSet('cv_lastsync', S.lastSync);
     return salvarLocal();
   }).catch(function(e){
@@ -222,12 +224,12 @@ function topo(){
 }
 function casca(conteudo, acoes){
   var r = rota().nome;
-  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['mais','Mais']];
+  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
       '<button class="sync" id="syncPill" type="button"></button></div>' +
-      '<nav class="tabs">' + tabs.map(function(t){ return '<a href="#' + t[0] + '" class="' + (r === t[0] || (r==='pedido' && t[0]==='pedidos') || (r==='cliente' && t[0]==='clientes') ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>' +
+      '<nav class="tabs">' + tabs.map(function(t){ return '<a href="#' + t[0] + '" class="' + (r === t[0] || (r==='pedido' && t[0]==='pedidos') || (r==='cliente' && t[0]==='clientes') || (r==='representada' && t[0]==='representadas') ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>' +
     '</div></header><main><div class="wrap">' +
     (S.syncErr ? '<div class="note bad">' + esc(S.syncErr) + '</div>' : '') +
     conteudo + '</div></main>' + (acoes ? '<div class="actions"><div class="wrap">' + acoes + '</div></div>' : '');
@@ -1045,6 +1047,151 @@ function telaEmail(p){
 }
 
 /* ---------- roteador ---------- */
+/* ---------- representadas (dados, contatos, política comercial, oferta do mês) ---------- */
+var REP_CONTATOS = [
+  ['diretor','Diretor'], ['gerente_geral','Gerente geral'], ['gerente_regional','Gerente regional'],
+  ['atendente_interno','Atendente interno'], ['atendente_financeiro','Atendente financeiro'],
+  ['sac','SAC (assistência técnica)'], ['marketing','Marketing']
+];
+function slug(s){ return semAcento(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40) || ('rep-' + Date.now()); }
+function listaReps(){
+  var m = {};
+  (S.cat ? S.cat.grupos : []).forEach(function(g){ m[g.id] = { id: g.id, nome: g.nome, dados: {} }; });
+  (S.reps || []).forEach(function(r){ m[r.id] = Object.assign({}, m[r.id] || {}, r, { dados: r.dados || {} }); });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
+}
+function acharRep(id){ return listaReps().find(function(r){ return r.id === id; }); }
+function soDig(s){ return String(s||'').replace(/\D/g,''); }
+function linkFone(f){ var d = soDig(f); if (!d) return ''; var w = d.length <= 11 ? '55' + d : d;
+  return ' <a class="btn sm" href="https://wa.me/' + w + '" target="_blank" rel="noopener">WhatsApp</a> <a class="btn sm" href="tel:+' + w + '">Ligar</a>'; }
+function linkMail(e){ return e ? ' <a class="btn sm" href="mailto:' + esc(e) + '">E-mail</a>' : ''; }
+function txtBloco(t){ return t ? '<div style="white-space:pre-wrap">' + esc(t) + '</div>' : '<span class="muted">—</span>'; }
+function arquivosHtml(arqs, editar){
+  if (!arqs || !arqs.length) return editar ? '' : '';
+  return '<div class="rep-arqs">' + arqs.map(function(a, i){
+    var img = /^image\//.test(a.tipo || '') || /\.(jpe?g|png|webp|gif)$/i.test(a.nome || '');
+    return '<div class="rep-arq">' + (img ? '<img src="' + esc(a.url) + '" alt="" data-zoom="' + esc(a.url) + '" data-leg="' + esc(a.nome) + '">' :
+      '<a class="rep-pdf" href="' + esc(a.url) + '" target="_blank" rel="noopener">📄<span>' + esc(a.nome || 'PDF') + '</span></a>') +
+      (editar ? '<button type="button" class="btn sm bad" data-rmarq="' + i + '">Remover</button>' : '') + '</div>';
+  }).join('') + '</div>';
+}
+function ligarZoomArqs(root){ root.querySelectorAll('[data-zoom]').forEach(function(im){ im.onclick = function(){ abrirZoom(im.dataset.zoom, im.dataset.leg || ''); }; }); }
+
+function telaRepresentadas(){
+  var l = listaReps();
+  casca('<div class="row" style="justify-content:space-between"><h1 style="margin:4px 0">Representadas</h1><a class="btn pri" href="#representada/nova/editar">+ Nova representada</a></div>' +
+    (S.repErr ? '<div class="note warn">' + esc(S.repErr) + '</div>' : '') +
+    '<div class="list">' + l.map(function(r){
+      var d = r.dados || {}, temOf = d.oferta_texto || (d.oferta_arquivos && d.oferta_arquivos.length);
+      return '<div class="card pad"><div class="row"><div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
+        '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
+        '<div class="row" style="gap:6px"><a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
+    }).join('') + '</div>');
+}
+
+function telaRepresentada(arg){
+  var p = String(arg||'').split('/'), id = decodeURIComponent(p[0] || ''), editar = p[1] === 'editar';
+  var nova = id === 'nova';
+  var r = nova ? { id: '', nome: '', dados: {} } : acharRep(id);
+  if (!r){ casca('<div class="card empty">Representada não encontrada. <a href="#representadas">Voltar</a></div>'); return; }
+  if (editar) return editarRep(r, nova);
+  var d = r.dados || {};
+  var html = '<div class="row"><a class="btn sm" href="#representadas">← Representadas</a><h1 style="margin:4px 0" class="grow">' + esc(r.nome) + '</h1><a class="btn pri" href="#representada/' + esc(r.id) + '/editar">Editar</a></div>' +
+    '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">⭐ Oferta do mês</h2>' +
+      (d.oferta_texto || (d.oferta_arquivos && d.oferta_arquivos.length) ? txtBloco(d.oferta_texto) + arquivosHtml(d.oferta_arquivos) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar para colocar texto, foto ou PDF.</span>') + '</div>' +
+    '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">Dados da representada</h2>' +
+      vlin('Nome / Razão social', esc(d.razao || r.nome)) + vlin('CNPJ', esc(fmtDoc(d.cnpj)) || '—') + vlin('Endereço', txtBloco(d.endereco)) +
+      vlin('E-mail para pedidos', d.email_pedidos ? esc(d.email_pedidos) + linkMail(d.email_pedidos) : '—') +
+    '<h2 class="sec">Contatos</h2>' +
+      REP_CONTATOS.map(function(c){ var x = (d.contatos || {})[c[0]] || {};
+        var v = [x.nome ? '<b>' + esc(x.nome) + '</b>' : '', x.fone ? esc(x.fone) : '', x.email ? esc(x.email) : ''].filter(Boolean).join(' · ');
+        return vlin(c[1], v ? v + '<div style="margin-top:4px">' + linkFone(x.fone) + linkMail(x.email) + '</div>' : '—'); }).join('') +
+    '<h2 class="sec">Política comercial</h2>' + txtBloco(d.politica) +
+    '<h2 class="sec">Observações</h2>' + txtBloco(d.obs) +
+    (r.atualizado_em ? '<p class="muted" style="font-size:12px;margin-top:16px">Atualizado em ' + dataBR(r.atualizado_em) + (r.atualizado_por ? ' por ' + esc(r.atualizado_por) : '') + '</p>' : '') +
+    '</div>';
+  casca(html);
+  ligarZoomArqs($app);
+}
+function vlin(lb, v){ return '<div class="fr" style="align-items:start"><div class="lb" style="font-weight:700">' + lb + '</div><div class="fv">' + v + '</div></div>'; }
+
+function editarRep(r, nova){
+  var d = JSON.parse(JSON.stringify(r.dados || {})); d.contatos = d.contatos || {}; d.oferta_arquivos = d.oferta_arquivos || [];
+  function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
+  function inp(id, v, extra){ return '<input class="in" id="' + id + '" value="' + esc(v) + '"' + (extra||'') + '>'; }
+  var html = '<div class="row"><a class="btn sm" href="' + (nova ? '#representadas' : '#representada/' + esc(r.id)) + '">← Voltar</a><h1 style="margin:4px 0">' + (nova ? 'Nova representada' : 'Editar · ' + esc(r.nome)) + '</h1></div>' +
+    '<div class="card pad cform" style="margin-top:10px">' +
+    '<h2 class="sec">Dados da representada</h2>' +
+    f('Nome (como aparece no programa) <span class="req">*</span>', inp('rNome', r.nome, ' maxlength="80"')) +
+    f('Razão social', inp('rRazao', d.razao, ' maxlength="150"')) +
+    f('CNPJ', '<input class="in w-m" id="rCnpj" inputmode="numeric" placeholder="00.000.000/0000-00" value="' + esc(fmtDoc(d.cnpj)) + '">') +
+    f('Endereço', '<textarea class="in" rows="2" id="rEnd">' + esc(d.endereco) + '</textarea>') +
+    f('E-mail para envio de pedidos', inp('rMailPed', d.email_pedidos, ' type="email" inputmode="email"')) +
+    '<h2 class="sec">Contatos</h2>' +
+    REP_CONTATOS.map(function(c){ var x = d.contatos[c[0]] || {};
+      return f(c[1], '<div class="rep-ct"><input class="in" data-ct="' + c[0] + '" data-k="nome" placeholder="Nome" value="' + esc(x.nome) + '">' +
+        '<input class="in" data-ct="' + c[0] + '" data-k="fone" inputmode="tel" placeholder="Telefone / WhatsApp" value="' + esc(x.fone) + '">' +
+        '<input class="in" data-ct="' + c[0] + '" data-k="email" type="email" inputmode="email" placeholder="E-mail" value="' + esc(x.email) + '"></div>'); }).join('') +
+    '<h2 class="sec">Política comercial</h2>' +
+    '<textarea class="in" rows="6" id="rPol" placeholder="Descontos, prazos, pedido mínimo, frete…">' + esc(d.politica) + '</textarea>' +
+    '<h2 class="sec">⭐ Oferta do mês</h2>' +
+    '<textarea class="in" rows="5" id="rOfTxt" placeholder="Texto da oferta (opcional)">' + esc(d.oferta_texto) + '</textarea>' +
+    '<div id="rArqs"></div>' +
+    '<div class="row" style="margin-top:8px"><label class="btn" for="rUp">📎 Anexar foto ou PDF</label><input type="file" id="rUp" accept="image/*,application/pdf" multiple hidden><span class="muted" id="rUpSt" style="font-size:13px"></span></div>' +
+    '<h2 class="sec">Observações</h2>' +
+    '<textarea class="in" rows="5" id="rObs" placeholder="Qualquer anotação">' + esc(d.obs) + '</textarea>' +
+    '</div>';
+  casca(html, '<a class="btn" href="' + (nova ? '#representadas' : '#representada/' + esc(r.id)) + '">Cancelar</a><button class="btn pri" id="rSalvar">' + (nova ? 'Cadastrar representada' : 'Salvar alterações') + '</button>');
+  var el = function(id){ return document.getElementById(id); };
+  function desenhaArqs(){ el('rArqs').innerHTML = arquivosHtml(d.oferta_arquivos, true); ligarZoomArqs(el('rArqs'));
+    el('rArqs').querySelectorAll('[data-rmarq]').forEach(function(b){ b.onclick = function(){ d.oferta_arquivos.splice(+b.dataset.rmarq, 1); desenhaArqs(); }; }); }
+  desenhaArqs();
+  var enviando = 0;
+  el('rUp').onchange = function(){
+    var fs = Array.prototype.slice.call(this.files || []); this.value = '';
+    if (!fs.length) return;
+    if (!navigator.onLine){ toast('Sem internet: anexe a oferta quando estiver online.'); return; }
+    var pasta = r.id || slug(el('rNome').value);
+    enviando += fs.length; el('rUpSt').textContent = 'Enviando ' + enviando + ' arquivo(s)…';
+    fs.forEach(function(file){
+      if (file.size > 20 * 1024 * 1024){ toast(file.name + ': arquivo maior que 20 MB'); enviando--; return; }
+      subirArquivo(pasta, file).then(function(a){ d.oferta_arquivos.push(a); desenhaArqs(); }, function(e){ toast('Não foi possível enviar ' + file.name + ': ' + String(e.message||e).slice(0,120), 5000); })
+        .then(function(){ enviando--; el('rUpSt').textContent = enviando ? 'Enviando ' + enviando + ' arquivo(s)…' : 'Anexos prontos — lembre de salvar.'; });
+    });
+  };
+  el('rSalvar').onclick = function(){
+    var nome = el('rNome').value.trim();
+    if (!nome){ toast('Informe o nome da representada.'); el('rNome').focus(); return; }
+    if (enviando){ toast('Aguarde terminar de enviar os anexos.'); return; }
+    if (!navigator.onLine){ toast('Sem internet: salve quando estiver online.'); return; }
+    d.razao = el('rRazao').value.trim(); d.cnpj = soDig(el('rCnpj').value); d.endereco = el('rEnd').value.trim();
+    d.email_pedidos = el('rMailPed').value.trim(); d.politica = el('rPol').value.trim(); d.oferta_texto = el('rOfTxt').value.trim(); d.obs = el('rObs').value.trim();
+    $app.querySelectorAll('[data-ct]').forEach(function(i){ var c = d.contatos[i.dataset.ct] = d.contatos[i.dataset.ct] || {}; c[i.dataset.k] = i.value.trim(); });
+    var id = r.id || slug(nome);
+    if (nova && acharRep(id)) id = id + '-' + Date.now().toString(36).slice(-4);
+    var row = { id: id, nome: nome, dados: d, atualizado_em: new Date().toISOString(), atualizado_por: S.perfil ? S.perfil.nome : null };
+    var b = this; b.disabled = true; b.textContent = 'Salvando…';
+    api('representadas', { method:'POST', body: row, prefer:'resolution=merge-duplicates,return=minimal' }).then(function(){
+      S.reps = (S.reps || []).filter(function(x){ return x.id !== id; }); S.reps.push(row); kvSet('representadas', S.reps);
+      toast('Representada salva'); location.hash = '#representada/' + encodeURIComponent(id);
+    }, function(e){
+      b.disabled = false; b.textContent = 'Salvar alterações';
+      var m = String(e.message||e); toast(/42P01|PGRST205|relation|does not exist|42501|row-level/.test(m) ? 'O banco ainda não tem a tabela de representadas (falta rodar a atualização do banco).' : 'Erro ao salvar: ' + m.slice(0,150), 6000);
+    });
+  };
+}
+function subirArquivo(pasta, file){
+  var nome = file.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\-]+/g,'_');
+  var path = encodeURIComponent(pasta) + '/' + Date.now() + '-' + nome;
+  var go = function(){ return fetch(CFG.url + '/storage/v1/object/representadas/' + path, { method:'POST',
+    headers: { 'apikey': CFG.key, 'Authorization': 'Bearer ' + S.sess.access_token, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' }, body: file }); };
+  var pre = (S.sess && Date.now() > S.sess.expires_at) ? renovar() : Promise.resolve();
+  return pre.then(go).then(function(r){ if (r.status === 401) return renovar().then(go); return r; }).then(function(r){
+    if (!r.ok) return r.text().then(function(t){ throw new Error(/Bucket not found/i.test(t) ? 'o banco ainda não tem a pasta de ofertas (falta rodar a atualização do banco)' : t || ('Erro ' + r.status)); });
+    return { url: CFG.url + '/storage/v1/object/public/representadas/' + path, nome: file.name, tipo: file.type, path: path };
+  });
+}
+
 function render(){
   if (!S.sess){ telaLogin(S.syncErr && /Sessão/.test(S.syncErr) ? S.syncErr : ''); return; }
   if (!S.perfil){ casca('<div class="card empty">Carregando seu perfil…</div>'); carregarPerfil().then(render, function(e){ telaLogin(e.message); S.sess = null; lsSet('cv_sess', null); }); return; }
@@ -1055,6 +1202,8 @@ function render(){
   if (r.nome === 'novo') return ED && ED.novo ? telaEditor() : telaNovo(r.arg);
   if (r.nome === 'clientes') return telaClientes(r.arg);
   if (r.nome === 'cliente') return telaCliente(r.arg);
+  if (r.nome === 'representadas') return telaRepresentadas();
+  if (r.nome === 'representada') return telaRepresentada(r.arg);
   if (r.nome === 'mais') return telaMais();
   return telaPedidos();
 }
@@ -1075,7 +1224,8 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden &
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function(){});
 
-Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila')]).then(function(r){
+Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas')]).then(function(r){
+  S.reps = r[5] || [];
   S.pedidos = r[0] || {}; S.clientes = r[1] || []; S.fila = r[2] || []; S.cfila = r[4] || [];
   render(); sincronizar();
 });

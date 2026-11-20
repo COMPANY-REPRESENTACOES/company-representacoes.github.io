@@ -195,6 +195,15 @@ input.in,select.in,textarea.in,.price-in,.qty{border-radius:4px}
 .btn,.btn.pri,.btn.ok,.btn.sm,.actions .btn.wa,.actions .btn.wa:hover,.btn:not(.pri):not(.ok),.sync,button.card,.qty,.zoom .zx{border:1.5px solid #d99a2b!important}
 .rm{border:1.5px solid #d99a2b!important;border-radius:4px;padding:2px 8px}
 .btn:not(.pri):not(.ok):hover,button.card:hover{box-shadow:0 0 0 1px #d99a2b inset}
+/* representadas */
+.rep-ct{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+@media (max-width:700px){.rep-ct{grid-template-columns:1fr}}
+.rep-arqs{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.rep-arq{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.rep-arq img{width:160px;height:160px;object-fit:contain;background:#fff;border:1.5px solid #d99a2b;border-radius:6px;cursor:zoom-in}
+.rep-pdf{width:160px;height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1.5px solid #d99a2b;border-radius:6px;background:var(--surface-2);font-size:40px;text-decoration:none;color:var(--text);text-align:center;padding:8px}
+.rep-pdf span{font-size:12px;font-weight:700;word-break:break-word}
+label.btn{cursor:pointer}
 </style>
 </head>
 <body>
@@ -202,6 +211,6 @@ input.in,select.in,textarea.in,.price-in,.qty{border-radius:4px}
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261120b"></script>
+<script src="app.js?v=20261120c"></script>
 </body>
 </html>
