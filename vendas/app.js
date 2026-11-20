@@ -1091,6 +1091,7 @@ function telaRepresentadas(){
     '<div class="list">' + l.map(function(r){
       var d = r.dados || {}, an = anexosRep(d), temOf = d.oferta_texto || (an.oferta && an.oferta.length);
       return '<div class="card pad"><div class="row"><div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
+        (function(){ var t = REP_ANEXOS.reduce(function(s, c){ return s + (an[c[0]] || []).length; }, 0); return t ? ' <span class="badge">📎 ' + t + ' anexo' + (t > 1 ? 's' : '') + '</span>' : ''; })() +
         '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
         '<div class="row" style="gap:6px"><a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
     }).join('') + '</div>');
@@ -1113,23 +1114,27 @@ function telaRepresentada(arg){
       REP_CONTATOS.map(function(c){ var x = (d.contatos || {})[c[0]] || {};
         var v = [x.nome ? '<b>' + esc(x.nome) + '</b>' : '', x.fone ? esc(x.fone) : '', x.email ? esc(x.email) : ''].filter(Boolean).join(' · ');
         return vlin(c[1], v ? v + '<div style="margin-top:4px">' + linkFone(x.fone) + linkMail(x.email) + '</div>' : '—'); }).join('') +
-    '<h2 class="sec">Tabelas de preço</h2>' + (an.tabelas && an.tabelas.length ? arquivosHtml(an.tabelas) : '<span class="muted">—</span>') +
-    '<h2 class="sec">Política comercial</h2>' + txtBloco(d.politica) + arquivosHtml(an.politica) +
-    '<h2 class="sec">Anexos gerais</h2>' + (an.geral && an.geral.length ? arquivosHtml(an.geral) : '<span class="muted">—</span>') +
+    '<h2 class="sec">Política comercial</h2>' + txtBloco(d.politica) +
+    '<h2 class="sec">📎 Anexos</h2><div class="rep-bts">' + REP_ANEXOS.map(function(c){ var n = (an[c[0]] || []).length;
+      return '<a class="btn" href="#rv_' + c[0] + '" data-pula="' + c[0] + '">' + c[1].replace('⭐ ','') + ' <span class="rep-n' + (n ? ' on' : '') + '">' + n + '</span></a>'; }).join('') + '</div>' +
+    REP_ANEXOS.map(function(c){ var l = an[c[0]] || []; return l.length ? '<div class="rep-grp" id="rv_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n on">' + l.length + '</span></div>' + arquivosHtml(l) + '</div>' : ''; }).join('') +
     '<h2 class="sec">Observações</h2>' + txtBloco(d.obs) +
     (r.atualizado_em ? '<p class="muted" style="font-size:12px;margin-top:16px">Atualizado em ' + dataBR(r.atualizado_em) + (r.atualizado_por ? ' por ' + esc(r.atualizado_por) : '') + '</p>' : '') +
     '</div>';
   casca(html);
   ligarZoomArqs($app);
+  $app.querySelectorAll('[data-pula]').forEach(function(a){ a.onclick = function(e){ e.preventDefault(); var t = document.getElementById('rv_' + a.dataset.pula); if (t) t.scrollIntoView({ behavior:'smooth', block:'center' }); else toast('Nenhum anexo nesta categoria.'); }; });
 }
 function vlin(lb, v){ return '<div class="fr" style="align-items:start"><div class="lb" style="font-weight:700">' + lb + '</div><div class="fv">' + v + '</div></div>'; }
 
 function editarRep(r, nova){
   var d = JSON.parse(JSON.stringify(r.dados || {})); d.contatos = d.contatos || {};
   d.anexos = anexosRep(d); delete d.oferta_arquivos; REP_ANEXOS.forEach(function(c){ d.anexos[c[0]] = d.anexos[c[0]] || []; });
-  function blocoAnexo(cat){ var c = REP_ANEXOS.find(function(x){ return x[0] === cat; });
-    return '<div id="rArqs_' + cat + '"></div><div class="row" style="margin-top:8px"><label class="btn" for="rUp_' + cat + '">' + c[2] + '</label>' +
-      '<input type="file" data-up="' + cat + '" id="rUp_' + cat + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden><span class="muted" id="rUpSt_' + cat + '" style="font-size:13px"></span></div>'; }
+  var blocoAnexos = '<div class="rep-bts">' + REP_ANEXOS.map(function(c){
+      return '<label class="btn" for="rUp_' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></label>' +
+        '<input type="file" data-up="' + c[0] + '" id="rUp_' + c[0] + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden>'; }).join('') + '</div>' +
+    '<div class="muted" id="rUpSt" style="font-size:13px;margin-top:6px"></div>' +
+    REP_ANEXOS.map(function(c){ return '<div class="rep-grp" id="rG_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n" id="rN2_' + c[0] + '">0</span></div><div id="rArqs_' + c[0] + '"></div></div>'; }).join('');
   function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
   function inp(id, v, extra){ return '<input class="in" id="' + id + '" value="' + esc(v) + '"' + (extra||'') + '>'; }
   var html = '<div class="row"><a class="btn sm" href="' + (nova ? '#representadas' : '#representada/' + esc(r.id)) + '">← Voltar</a><h1 style="margin:4px 0">' + (nova ? 'Nova representada' : 'Editar · ' + esc(r.nome)) + '</h1></div>' +
@@ -1145,23 +1150,23 @@ function editarRep(r, nova){
       return f(c[1], '<div class="rep-ct"><input class="in" data-ct="' + c[0] + '" data-k="nome" placeholder="Nome" value="' + esc(x.nome) + '">' +
         '<input class="in" data-ct="' + c[0] + '" data-k="fone" inputmode="tel" placeholder="Telefone / WhatsApp" value="' + esc(x.fone) + '">' +
         '<input class="in" data-ct="' + c[0] + '" data-k="email" type="email" inputmode="email" placeholder="E-mail" value="' + esc(x.email) + '"></div>'); }).join('') +
-    '<h2 class="sec">Tabelas de preço</h2>' + blocoAnexo('tabelas') +
     '<h2 class="sec">⭐ Oferta do mês</h2>' +
-    '<textarea class="in" rows="5" id="rOfTxt" placeholder="Texto da oferta (opcional)">' + esc(d.oferta_texto) + '</textarea>' + blocoAnexo('oferta') +
+    '<textarea class="in" rows="5" id="rOfTxt" placeholder="Texto da oferta (opcional)">' + esc(d.oferta_texto) + '</textarea>' +
     '<h2 class="sec">Política comercial</h2>' +
-    '<textarea class="in" rows="6" id="rPol" placeholder="Descontos, prazos, pedido mínimo, frete…">' + esc(d.politica) + '</textarea>' + blocoAnexo('politica') +
-    '<h2 class="sec">Anexos gerais</h2>' + blocoAnexo('geral') +
+    '<textarea class="in" rows="6" id="rPol" placeholder="Descontos, prazos, pedido mínimo, frete…">' + esc(d.politica) + '</textarea>' +
+    '<h2 class="sec">📎 Anexos</h2>' + blocoAnexos +
     '<h2 class="sec">Observações</h2>' +
     '<textarea class="in" rows="5" id="rObs" placeholder="Qualquer anotação">' + esc(d.obs) + '</textarea>' +
     '</div>';
   casca(html, '<a class="btn" href="' + (nova ? '#representadas' : '#representada/' + esc(r.id)) + '">Cancelar</a><button class="btn pri" id="rSalvar">' + (nova ? 'Cadastrar representada' : 'Salvar alterações') + '</button>');
   var el = function(id){ return document.getElementById(id); };
-  function desenhaArqs(cat){ var w = el('rArqs_' + cat); w.innerHTML = arquivosHtml(d.anexos[cat], true); ligarZoomArqs(w);
+  function desenhaArqs(cat){ var w = el('rArqs_' + cat), n = d.anexos[cat].length; w.innerHTML = arquivosHtml(d.anexos[cat], true); ligarZoomArqs(w);
+    el('rN_' + cat).textContent = n; el('rN2_' + cat).textContent = n; el('rN_' + cat).classList.toggle('on', n > 0); el('rG_' + cat).hidden = !n;
     w.querySelectorAll('[data-rmarq]').forEach(function(b){ b.onclick = function(){ d.anexos[cat].splice(+b.dataset.rmarq, 1); desenhaArqs(cat); }; }); }
   REP_ANEXOS.forEach(function(c){ desenhaArqs(c[0]); });
   var enviando = 0;
   $app.querySelectorAll('[data-up]').forEach(function(inp){ inp.onchange = function(){
-    var cat = inp.dataset.up, st = el('rUpSt_' + cat);
+    var cat = inp.dataset.up, st = el('rUpSt');
     var fs = Array.prototype.slice.call(inp.files || []); inp.value = '';
     if (!fs.length) return;
     if (!navigator.onLine){ toast('Sem internet: anexe quando estiver online.'); return; }
