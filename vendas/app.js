@@ -1081,3 +1081,25 @@ Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalog
 });
 window.__cv = S;
 })();
+
+/* ----- foto ampliada: toque na foto do produto (catálogo ou pedido) abre em tamanho grande; X fecha ----- */
+function abrirZoom(src, legenda){
+  fecharZoom();
+  var z = document.createElement('div'); z.className = 'zoom'; z.id = 'zoomFoto';
+  z.innerHTML = '<button type="button" class="zx" aria-label="Fechar foto">✕</button><img alt="">' + (legenda ? '<div class="zc"></div>' : '');
+  z.querySelector('img').src = src;
+  if (legenda) z.querySelector('.zc').textContent = legenda;
+  z.addEventListener('click', function(e){ if (e.target === z || e.target.classList.contains('zx')) fecharZoom(); });
+  document.body.appendChild(z);
+}
+function fecharZoom(){ var z = document.getElementById('zoomFoto'); if (z) z.remove(); }
+document.addEventListener('click', function(e){
+  var im = e.target.closest && e.target.closest('.cat-it > img, .it > img');
+  if (!im) return;
+  var src = im.currentSrc || im.src;
+  if (!src || /company\.png$/.test(src)) return; // sem foto do produto
+  e.preventDefault(); e.stopPropagation();
+  var box = im.parentNode, cod = box.querySelector('b, .cod'), ds = box.querySelector('.ds, div.muted');
+  abrirZoom(src, [cod && cod.textContent, ds && ds.textContent].filter(Boolean).join(' · '));
+}, true);
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('zoomFoto')){ e.stopPropagation(); fecharZoom(); } }, true);

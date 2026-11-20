@@ -185,6 +185,12 @@ input.in,select.in,textarea.in,.price-in,.qty{border-radius:4px}
 /* contorno dourado nos botões de filtro */
 .chip,.chip[aria-pressed="true"],:root .chip{border:1.5px solid #d99a2b!important}
 .chip:hover{box-shadow:0 0 0 1px #d99a2b inset}
+/* foto ampliada (padrão em todas as representadas) */
+.cat-it img,.it img{cursor:zoom-in}
+.zoom{position:fixed;inset:0;z-index:90;background:rgba(10,14,20,.88);display:flex;align-items:center;justify-content:center;padding:56px 12px 24px}
+.zoom img{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.zoom .zx{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;color:#16181d;font-size:22px;font-weight:800;line-height:44px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.zoom .zc{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-weight:700;font-size:14px;padding:0 60px}
 </style>
 </head>
 <body>
