@@ -1055,7 +1055,7 @@ var REP_CONTATOS = [
 ];
 var REP_ANEXOS = [
   ['tabelas','Tabelas de preço','📎 ANEXAR TABELAS'],
-  ['catalogo','Catálogos','📎 ANEXAR CATÁLOGO'],
+  ['catalogo','Catálogos','🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE', 'link'],
   ['oferta','⭐ Oferta do mês','📎 ANEXAR OFERTA DO MÊS'],
   ['politica','Política comercial','📎 ANEXAR POLÍTICA COMERCIAL'],
   ['geral','Anexos gerais','📎 ANEXOS GERAL']
@@ -1132,10 +1132,11 @@ function editarRep(r, nova){
   var d = JSON.parse(JSON.stringify(r.dados || {})); d.contatos = d.contatos || {};
   d.anexos = anexosRep(d); delete d.oferta_arquivos; REP_ANEXOS.forEach(function(c){ d.anexos[c[0]] = d.anexos[c[0]] || []; });
   var blocoAnexos = '<div class="rep-bts">' + REP_ANEXOS.map(function(c){
+      if (c[3] === 'link') return '<button type="button" class="btn" data-lk="' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></button>';
       return '<label class="btn" for="rUp_' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></label>' +
         '<input type="file" data-up="' + c[0] + '" id="rUp_' + c[0] + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden>'; }).join('') + '</div>' +
     '<div class="row" style="margin-top:8px"><button type="button" class="btn" id="rLink">🔗 Adicionar link (arquivo grande / Google Drive)</button></div>' +
-    '<div class="muted" style="font-size:12.5px;margin-top:4px">Arquivos até 50 MB sobem direto. Maiores: coloque no Google Drive, copie o link de compartilhamento e use “Adicionar link”.</div>' +
+    '<div class="muted" style="font-size:12.5px;margin-top:4px">Catálogos: coloque o arquivo no Google Drive, copie o link de compartilhamento e use “🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE”. Os outros anexos sobem direto (até 50 MB); maiores, use “Adicionar link”.</div>' +
     '<div class="muted" id="rUpSt" style="font-size:13px;margin-top:6px"></div>' +
     REP_ANEXOS.map(function(c){ return '<div class="rep-grp" id="rG_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n" id="rN2_' + c[0] + '">0</span></div><div id="rArqs_' + c[0] + '"></div></div>'; }).join('');
   function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
@@ -1181,10 +1182,10 @@ function editarRep(r, nova){
       subirArquivo(pasta, file).then(function(a){ d.anexos[cat].push(a); desenhaArqs(cat); }, function(e){ toast('Não foi possível enviar ' + file.name + ': ' + String(e.message||e).slice(0,120), 5000); }).then(fim);
     });
   }; });
-  el('rLink').onclick = function(){
-    var m = modal('Adicionar link',
-      '<label class="lb">Onde guardar</label><select class="in" id="lkCat">' + REP_ANEXOS.map(function(c){ return '<option value="' + c[0] + '">' + c[1].replace('⭐ ','') + '</option>'; }).join('') + '</select>' +
-      '<label class="lb">Nome do arquivo</label><input class="in" id="lkNome" placeholder="Ex.: Catálogo 2026, Tabela Novembro">' +
+  function abrirLink(catIni){
+    var m = modal(catIni === 'catalogo' ? 'Link do catálogo (Google Drive)' : 'Adicionar link',
+      '<label class="lb">Onde guardar</label><select class="in" id="lkCat">' + REP_ANEXOS.map(function(c){ return '<option value="' + c[0] + '"' + (c[0] === catIni ? ' selected' : '') + '>' + c[1].replace('⭐ ','') + '</option>'; }).join('') + '</select>' +
+      '<label class="lb">Nome do arquivo</label><input class="in" id="lkNome" placeholder="' + (catIni === 'catalogo' ? 'Ex.: Catálogo 2026' : 'Ex.: Catálogo 2026, Tabela Novembro') + '">' +
       '<label class="lb">Link (Google Drive, Dropbox, OneDrive…)</label><input class="in" id="lkUrl" inputmode="url" placeholder="https://drive.google.com/…">' +
       '<p class="muted" style="font-size:12.5px">No Google Drive: botão direito no arquivo → Compartilhar → Acesso geral: “Qualquer pessoa com o link” → Copiar link.</p>' +
       '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn pri" id="lkOk">Adicionar</button></div>');
@@ -1194,7 +1195,9 @@ function editarRep(r, nova){
       d.anexos[cat].push({ url: url, nome: nome || 'Link', tipo: 'link' });
       desenhaArqs(cat); m.ov.remove(); document.body.style.overflow = ''; el('rUpSt').textContent = 'Link adicionado — lembre de salvar.';
     };
-  };
+  }
+  el('rLink').onclick = function(){ abrirLink(''); };
+  $app.querySelectorAll('[data-lk]').forEach(function(b){ b.onclick = function(){ abrirLink(b.dataset.lk); }; });
   el('rSalvar').onclick = function(){
     var nome = el('rNome').value.trim();
     if (!nome){ toast('Informe o nome da representada.'); el('rNome').focus(); return; }
