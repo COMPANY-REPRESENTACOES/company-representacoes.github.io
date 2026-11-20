@@ -2234,6 +2234,8 @@
 .topbar:not(.compact) .pxc-open{max-height:none!important;overflow-y:visible!important}
 .pxc-tog{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:6px 0 0;padding:8px 12px;border:1.5px dashed currentColor;border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:700;letter-spacing:.02em;cursor:pointer;opacity:.9}
 .pxc-tog[hidden]{display:none!important}
+.pxc-tog.pxc-more{border:2px dashed var(--accent,currentColor);animation:pxcBlink 1.1s ease-in-out infinite}
+@keyframes pxcBlink{0%,100%{border-color:var(--accent,currentColor);box-shadow:0 0 0 0 transparent}50%{border-color:transparent;box-shadow:0 0 10px 1px var(--accent,currentColor)}}
 #topbar.compact > .pxc-tog:not([hidden]),.topbar.compact > .pxc-tog.pxc-tog.pxc-tog.pxc-tog.pxc-tog:not([hidden]){display:flex!important;margin-top:4px;padding:5px 10px;font-size:12px}
 </style>
 <script>
@@ -2265,6 +2267,7 @@
       var info = rowsInfo(el);
       if (info.tops.length <= limit){ tog.hidden = true; el.classList.remove('pxc-open'); busy = false; return; }
       tog.hidden = false; paint();
+      tog.classList.toggle('pxc-more', !open);
       if (open){ el.classList.add('pxc-open'); tog.innerHTML = '&#9652; Mostrar menos'; }
       else {
         el.classList.remove('pxc-open'); el.classList.add('pxc-clip');
