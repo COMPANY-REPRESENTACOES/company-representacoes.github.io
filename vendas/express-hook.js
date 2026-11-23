@@ -36,7 +36,7 @@
       var assinatura = JSON.stringify([itens, val('clientName'), val('clientDoc')]);
       if (assinatura === ultimo) return; // mesmo pedido enviado de novo (ex.: tocou duas vezes)
       ultimo = assinatura;
-      var prazo = val('clientPrazo');
+      var prazo = val('clientPrazo') || val('clientTerm');
       var row = {
         id: uuid(), numero: orderNo, origem: 'express', grupo: META.grupo, marca: META.marca, politica: META.politica,
         link: location.pathname.replace(/\//g, ''), vendedor_codigo: META.vendedor,

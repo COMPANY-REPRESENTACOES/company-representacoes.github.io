@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
+<head><script src="/vendas/config.js"></script><script>window.EXPRESS_META={"grupo": "dreamer", "marca": "Dreamer", "politica": "Tabela", "vendedor": "g"};</script><script src="/vendas/express-hook.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta charset="utf-8">
 <meta name="robots" content="noindex,nofollow">
@@ -1652,6 +1652,7 @@
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
     if (!p) return;
+    try { window.__expressHook && window.__expressHook(p.o, p.orderNo); } catch(_e) {}
     var shortMsg = 'Olá! Segue o PDF do pedido ' + p.orderNo +
       (p.o.name ? ' - ' + p.o.name : '') + ' (Total ' + fmt(p.o.total) + ').';
 
@@ -2097,6 +2098,7 @@
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
     if (!p) return;
+    try { window.__expressHook && window.__expressHook(p.o, p.orderNo); } catch(_e) {}
     btn.disabled = true;
     savePdf(p).then(function(){ btn.disabled = false; }, function(){ btn.disabled = false; });
   });

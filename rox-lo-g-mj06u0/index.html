@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}  .field .req{color:#d0121b;font-weight:800;}
+<!doctype html><html><head><script src="/vendas/config.js"></script><script>window.EXPRESS_META={"grupo": "dylan", "marca": "Roxtone", "politica": "Lojas Oficiais", "vendedor": "g"};</script><script src="/vendas/express-hook.js"></script><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}  .field .req{color:#d0121b;font-weight:800;}
   .field input.invalid{border-color:#d0121b !important;box-shadow:0 0 0 3px rgba(208,18,27,.15);background:#fff6f6;}
   .req-msg{margin-top:12px;padding:10px 12px;border-radius:10px;background:#fff1f1;border:1px solid #f3b4b7;color:#a30d15;font-size:13px;font-weight:600;}
 </style></head><body>
@@ -1496,6 +1496,7 @@
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
     if (!p) return;
+    try { window.__expressHook && window.__expressHook(p.o, p.orderNo); } catch(_e) {}
     var shortMsg = 'Olá! Segue o PDF do pedido ' + p.orderNo +
       (p.o.name ? ' - ' + p.o.name : '') + ' (Total ' + fmt(p.o.total) + ').';
 
@@ -1932,6 +1933,7 @@
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
     if (!p) return;
+    try { window.__expressHook && window.__expressHook(p.o, p.orderNo); } catch(_e) {}
     btn.disabled = true;
     savePdf(p).then(function(){ btn.disabled = false; }, function(){ btn.disabled = false; });
   });
