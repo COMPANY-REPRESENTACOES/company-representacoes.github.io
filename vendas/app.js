@@ -5,10 +5,11 @@ var CFG = window.CV_CONFIG;
 var $app = document.getElementById('app');
 
 var STATUS = [
-  ['recebido','Recebido'],['em_revisao','Em revisão'],['espelho_enviado','Espelho enviado'],['aprovado','Aprovado'],
+  ['recebido','Recebido'],['espelho_enviado','Espelho enviado'],
   ['enviado_fabrica','Enviado à fábrica'],['faturado','Faturado'],['cancelado','Cancelado']
 ];
-var STATUS_NOME = {}; STATUS.forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
+var STATUS_ANTIGOS = [['em_revisao','Em revisão'],['aprovado','Aprovado']]; /* não usados mais; só para pedidos antigos */
+var STATUS_NOME = {}; STATUS.concat(STATUS_ANTIGOS).forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
 /* regras comerciais por representada (pedido mínimo, à vista, prazos com valor mínimo por duplicata) */
 var REGRAS = {
   vector: { minimo: 1000, minDup: 500, avistas: [ { nome: 'À vista PIX (5% de desconto)', desc: 5 }, { nome: 'À vista 15 dd (5% de desconto)', desc: 5 } ],
@@ -478,7 +479,7 @@ function telaEditor(){
     (ED.sujo ? '<div class="note info">Você tem alterações não salvas.</div>' : '') +
     (travado ? '<div class="note info">Pedido ' + esc(STATUS_NOME[p.status]) + '. Para editar, mude o status.</div>' : '') +
     '<div class="card pad"><div class="grid2">' +
-      '<div><label class="lb">Status</label><select class="in" id="eSt">' + STATUS.map(function(s){ return '<option value="' + s[0] + '"' + (p.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div><label class="lb">Status</label><select class="in" id="eSt">' + (STATUS_NOME[p.status] && !STATUS.some(function(s){ return s[0] === p.status; }) ? '<option value="' + p.status + '" selected>' + STATUS_NOME[p.status] + ' (antigo)</option>' : '') + STATUS.map(function(s){ return '<option value="' + s[0] + '"' + (p.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>' +
       '<div><label class="lb">Política de preço</label><select class="in" id="ePol"' + (itTrav ? ' disabled title="Toque em Editar itens para mudar a política"' : '') + '>' + (g ? g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (politicaId(p.grupo, p.politica) === x.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') : '<option>' + esc(p.politica) + '</option>') + '</select></div>' +
       '<div><label class="lb">Cliente / razão social</label><input class="in" data-c="name" value="' + esc(c.name) + '"></div>' +
       '<div><label class="lb">CNPJ / CPF</label><input class="in" data-c="doc" inputmode="numeric" value="' + esc(c.doc) + '"></div>' +
@@ -722,7 +723,7 @@ function telaNovo(arg){
       id: uuid(), numero: 'CV-' + String(d.getFullYear()).slice(2) + p2(d.getMonth()+1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + Math.floor(Math.random()*90+10),
       origem: 'app', grupo: gsel, marca: g.nome, politica: g.politicas.find(function(x){ return x.id === pid; }).nome, vendedor_codigo: vsel,
       cliente: c ? { name: c.nome, doc: c.doc || '', phone: c.telefone || '', city: c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', carrier: c.transportadora || '' } : { name: nome },
-      itens: [], total: 0, prazo: '', obs: '', status: 'em_revisao', original: null
+      itens: [], total: 0, prazo: '', obs: '', status: 'recebido', original: null
     } };
     S.pedidos[ED.p.id] = undefined; delete S.pedidos[ED.p.id];
     telaEditor(); window.scrollTo(0,0);
