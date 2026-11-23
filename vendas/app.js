@@ -1299,7 +1299,7 @@ function telaRepresentada(arg){
   var html = '<div class="row"><a class="btn sm" href="#representadas">← Representadas</a><h1 style="margin:4px 0" class="grow">' + esc(r.nome) + '</h1><a class="btn pri" href="#representada/' + esc(r.id) + '/editar">Editar</a></div>' +
     (d.logo && d.logo.url ? '<div class="card pad" style="margin-top:10px;text-align:center"><img class="rep-logo-big" src="' + esc(d.logo.url) + '" alt="Logomarca ' + esc(r.nome) + '" data-zoom="' + esc(d.logo.url) + '" data-leg="' + esc(r.nome) + '"></div>' : '') +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">⭐ Oferta do mês</h2>' +
-      (d.oferta_texto || (an.oferta && an.oferta.length) ? txtBloco(d.oferta_texto) + arquivosHtml(an.oferta) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar para colocar texto, foto ou PDF.</span>') + '</div>' +
+      (d.oferta_texto || (an.oferta && an.oferta.length) ? txtBloco(d.oferta_texto) + arquivosHtml(an.oferta) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar e use o botão Anexar oferta do mês (foto ou PDF).</span>') + '</div>' +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">Dados da representada</h2>' +
       vlin('Nome / Razão social', esc(d.razao || r.nome)) + vlin('CNPJ', esc(fmtDoc(d.cnpj)) || '—') + vlin('Endereço', txtBloco(d.endereco)) +
       vlin('Telefone da empresa', d.telefone ? esc(d.telefone) + '<div style="margin-top:4px">' + linkFone(d.telefone) + '</div>' : '—') +
@@ -1308,7 +1308,7 @@ function telaRepresentada(arg){
       REP_CONTATOS.map(function(c){ var x = (d.contatos || {})[c[0]] || {};
         var v = [x.nome ? '<b>' + esc(x.nome) + '</b>' : '', x.fone ? esc(x.fone) : '', x.email ? esc(x.email) : ''].filter(Boolean).join(' · ');
         return vlin(c[1], v ? v + '<div style="margin-top:4px">' + linkFone(x.fone) + linkMail(x.email) + '</div>' : '—'); }).join('') +
-    '<h2 class="sec">Política comercial</h2>' + txtBloco(d.politica) +
+    (d.politica ? '<h2 class="sec">Política comercial (texto antigo)</h2>' + txtBloco(d.politica) : '') +
     '<h2 class="sec">📎 Anexos</h2><div class="rep-bts">' + REP_ANEXOS.map(function(c){ var n = (an[c[0]] || []).length;
       return '<a class="btn" href="#rv_' + c[0] + '" data-pula="' + c[0] + '">' + c[1].replace('⭐ ','') + ' <span class="rep-n' + (n ? ' on' : '') + '">' + n + '</span></a>'; }).join('') + '</div>' +
     REP_ANEXOS.map(function(c){ var l = an[c[0]] || []; return l.length ? '<div class="rep-grp" id="rv_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n on">' + l.length + '</span></div>' + arquivosHtml(l) + '</div>' : ''; }).join('') +
@@ -1350,10 +1350,6 @@ function editarRep(r, nova){
       return f(c[1], '<div class="rep-ct"><input class="in" data-ct="' + c[0] + '" data-k="nome" placeholder="Nome" value="' + esc(x.nome) + '">' +
         '<input class="in" data-ct="' + c[0] + '" data-k="fone" inputmode="tel" placeholder="Telefone / WhatsApp" value="' + esc(x.fone) + '">' +
         '<input class="in" data-ct="' + c[0] + '" data-k="email" type="email" inputmode="email" placeholder="E-mail" value="' + esc(x.email) + '"></div>'); }).join('') +
-    '<h2 class="sec">⭐ Oferta do mês</h2>' +
-    '<textarea class="in" rows="5" id="rOfTxt" placeholder="Texto da oferta (opcional)">' + esc(d.oferta_texto) + '</textarea>' +
-    '<h2 class="sec">Política comercial</h2>' +
-    '<textarea class="in" rows="6" id="rPol" placeholder="Descontos, prazos, pedido mínimo, frete…">' + esc(d.politica) + '</textarea>' +
     '<h2 class="sec">📎 Anexos</h2>' + blocoAnexos +
     '<h2 class="sec">Observações</h2>' +
     '<textarea class="in" rows="5" id="rObs" placeholder="Qualquer anotação">' + esc(d.obs) + '</textarea>' +
@@ -1439,7 +1435,7 @@ function editarRep(r, nova){
     if (enviando){ toast('Aguarde terminar de enviar os anexos.'); return; }
     if (!navigator.onLine){ toast('Sem internet: salve quando estiver online.'); return; }
     d.razao = el('rRazao').value.trim(); d.cnpj = soDig(el('rCnpj').value); d.endereco = el('rEnd').value.trim(); d.telefone = el('rFone').value.trim();
-    d.email_pedidos = el('rMailPed').value.trim(); d.politica = el('rPol').value.trim(); d.oferta_texto = el('rOfTxt').value.trim(); d.obs = el('rObs').value.trim();
+    d.email_pedidos = el('rMailPed').value.trim(); d.obs = el('rObs').value.trim();
     $app.querySelectorAll('[data-ct]').forEach(function(i){ var c = d.contatos[i.dataset.ct] = d.contatos[i.dataset.ct] || {}; c[i.dataset.k] = i.value.trim(); });
     var id = r.id || slug(nome);
     if (nova && acharRep(id)) id = id + '-' + Date.now().toString(36).slice(-4);
