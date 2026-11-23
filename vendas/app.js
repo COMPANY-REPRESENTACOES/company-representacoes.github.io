@@ -1320,50 +1320,101 @@ function listaBarras(itens, fmtV){
 }
 function telaDesempenho(){
   var hoje = new Date();
-  S.fDe = S.fDe || { de: isoDia(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: isoDia(new Date(hoje.getFullYear(), hoje.getMonth()+1, 0)), vend: '' };
-  var f = S.fDe, admin = souAdmin();
-  var meu = S.perfil && S.perfil.codigo;
+  S.fDe = S.fDe || { de: isoDia(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: isoDia(new Date(hoje.getFullYear(), hoje.getMonth()+1, 0)), vend: '', per: 'mes' };
+  var f = S.fDe, admin = souAdmin(), meu = S.perfil && S.perfil.codigo;
   var base = listaPedidos().filter(function(p){ return p.status !== 'cancelado' && (admin ? (!f.vend || p.vendedor_codigo === f.vend) : p.vendedor_codigo === meu); });
   var dia = function(p){ return isoDia(new Date(p.criado_em)); };
+  var d0 = new Date(f.de + 'T00:00:00'), d1 = new Date(f.ate + 'T00:00:00'), ndias = Math.round((d1 - d0)/864e5) + 1;
+  var pa1 = new Date(d0.getTime() - 864e5), pa0 = new Date(d0.getTime() - ndias*864e5), pDe = isoDia(pa0), pAte = isoDia(pa1);
   var noPer = base.filter(function(p){ var d = dia(p); return d >= f.de && d <= f.ate; });
-  var tot = noPer.reduce(function(s2, p){ return s2 + valorPed(p); }, 0), qt = noPer.length;
-  // meses do período
-  var d0 = new Date(f.de + 'T12:00:00'), d1 = new Date(f.ate + 'T12:00:00'), meses = [];
-  for (var cur = new Date(d0.getFullYear(), d0.getMonth(), 1); cur <= d1 && meses.length < 36; cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)) meses.push([cur.getFullYear(), cur.getMonth()]);
-  var porMes = meses.map(function(ym){ var l = noPer.filter(function(p){ var d = new Date(p.criado_em); return d.getFullYear() === ym[0] && d.getMonth() === ym[1]; }); return { rot: p2(ym[1]+1) + '/' + String(ym[0]).slice(2), q: l.length, v: l.reduce(function(s2, p){ return s2 + valorPed(p); }, 0) }; });
-  // comparativo: 3 últimos meses do período, nos 3 últimos anos
-  var mf = d1.getMonth(), yf = d1.getFullYear(), cm = [mf-2, mf-1, mf].map(function(x){ return (x + 12) % 12; });
-  var anos = [yf-2, yf-1, yf];
-  var comp = anos.map(function(a){ return { rot: String(a), vals: cm.map(function(mm){ var aa = mm > mf ? a-1 : a; return base.filter(function(p){ var d = new Date(p.criado_em); return d.getFullYear() === aa && d.getMonth() === mm; }).reduce(function(s2, p){ return s2 + valorPed(p); }, 0); }) }; });
-  // por representada / vendedor
-  function agrupa(fn, nome){ var o = {}; noPer.forEach(function(p){ var k = fn(p); o[k] = o[k] || { n: nome(k), v: 0, q: 0 }; o[k].v += valorPed(p); o[k].q++; }); return Object.keys(o).map(function(k){ return o[k]; }).sort(function(a, b){ return b.v - a.v; }); }
+  var ant = base.filter(function(p){ var d = dia(p); return d >= pDe && d <= pAte; });
+  function resumo(l){ var v = l.reduce(function(s2, p){ return s2 + valorPed(p); }, 0), cl = {}; l.forEach(function(p){ var c = p.cliente || {}; cl[soNum(c.doc) || String(c.name || '').toLowerCase()] = 1; }); return { v: v, q: l.length, t: l.length ? v/l.length : 0, c: Object.keys(cl).length }; }
+  var R = resumo(noPer), A = resumo(ant);
+  function delta(a, b){ if (!b) return a ? '<span class="dz-d up">novo</span>' : '<span class="dz-d">—</span>'; var x = (a - b)/b*100, up = x >= 0; return '<span class="dz-d ' + (up ? 'up' : 'dn') + '">' + (up ? '▲' : '▼') + ' ' + Math.abs(x).toFixed(0) + '%</span>'; }
+  // série da evolução: por dia (até 62 dias) ou por mês
+  var porDia = ndias <= 62, pts = [], ptsA = [];
+  if (porDia){
+    for (var i = 0; i < ndias; i++){ var dd = isoDia(new Date(d0.getTime() + i*864e5)), da = isoDia(new Date(pa0.getTime() + i*864e5)); pts.push({ k: dd, rot: dd.slice(8) + '/' + dd.slice(5,7), v: 0, q: 0 }); ptsA.push({ k: da, v: 0 }); }
+    noPer.forEach(function(p){ var x = pts.find(function(z){ return z.k === dia(p); }); if (x){ x.v += valorPed(p); x.q++; } });
+    ant.forEach(function(p){ var x = ptsA.find(function(z){ return z.k === dia(p); }); if (x) x.v += valorPed(p); });
+    // acumulado: mostra a curva do mês crescendo
+    var ac = 0, aa = 0; pts.forEach(function(z, j){ ac += z.v; z.acc = ac; aa += ptsA[j].v; ptsA[j].acc = aa; });
+  } else {
+    for (var cur = new Date(d0.getFullYear(), d0.getMonth(), 1); cur <= d1 && pts.length < 36; cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1)){ var y = cur.getFullYear(), m = cur.getMonth(); pts.push({ y: y, m: m, rot: MESES[m] + '/' + String(y).slice(2), v: 0, q: 0 }); }
+    noPer.forEach(function(p){ var d = new Date(p.criado_em), x = pts.find(function(z){ return z.y === d.getFullYear() && z.m === d.getMonth(); }); if (x){ x.v += valorPed(p); x.q++; } });
+    pts.forEach(function(z){ z.acc = z.v; }); ptsA = null;
+  }
+  // comparativo anual
+  var mf = d1.getMonth(), yf = d1.getFullYear(), cm = [mf-2, mf-1, mf].map(function(x){ return (x + 12) % 12; }), anos = [yf-2, yf-1, yf];
+  var comp = anos.map(function(a){ return { rot: String(a), vals: cm.map(function(mm){ var a2 = mm > mf ? a-1 : a; return base.filter(function(p){ var d = new Date(p.criado_em); return d.getFullYear() === a2 && d.getMonth() === mm; }).reduce(function(s2, p){ return s2 + valorPed(p); }, 0); }) }; });
+  function agrupa(fn, nome){ var o = {}; noPer.forEach(function(p){ var k = fn(p); o[k] = o[k] || { k: k, n: nome(k, p), v: 0, q: 0 }; o[k].v += valorPed(p); o[k].q++; }); return Object.keys(o).map(function(k){ return o[k]; }).sort(function(a, b){ return b.v - a.v; }); }
   var porRep = agrupa(function(p){ return p.grupo; }, function(k){ var g = grupo(k); return g ? g.nome : k; });
   var porVend = agrupa(function(p){ return p.vendedor_codigo || '?'; }, function(k){ return CFG.vendedores[k] || k; });
-  var card = function(tit, extra, corpo, larga){ return '<div class="card dv-card' + (larga ? ' larga' : '') + '"><div class="dv-h"><b>' + tit + '</b>' + (extra ? '<span>' + extra + '</span>' : '') + '</div><div class="dv-b">' + corpo + '</div></div>'; };
-  var vazio = '<div class="empty">Não há dados para serem exibidos.</div>';
-  var html = '<div class="row dv-top"><h1 class="grow" style="margin:0">Desempenho</h1><div class="dv-fs">' +
-    '<label class="dv-f">De<input class="in" type="date" id="dDe" value="' + f.de + '"></label><label class="dv-f">Até<input class="in" type="date" id="dAte" value="' + f.ate + '"></label>' +
-    (admin ? '<label class="dv-f">Vendedor<select class="in" id="dVend"><option value="">Todos</option>' + Object.keys(CFG.vendedores).map(function(k){ return '<option value="' + k + '"' + (f.vend === k ? ' selected' : '') + '>' + esc(CFG.vendedores[k]) + '</option>'; }).join('') + '</select></label>' : '') + '</div></div>' +
-    '<div class="chips wrap" style="margin-top:8px">' + [['mes','Este mês'],['ant','Mês passado'],['tri','Últimos 3 meses'],['ano','Este ano']].map(function(o){ return '<button class="chip" data-per="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
-    '<div class="dv-kpis"><div class="card"><span>Pedidos</span><b>' + qt + '</b></div><div class="card"><span>Vendas</span><b>' + fmt(tot) + '</b></div><div class="card"><span>Ticket médio</span><b>' + (qt ? fmt(tot/qt) : '—') + '</b></div></div>' +
-    '<div class="dv-grid2">' +
-      card('Nº de pedidos × período', 'Total: ' + qt, qt ? svgBarras(porMes.map(function(x){ return { rot: x.rot, vals: [x.q] }; }), ['Pedidos'], function(v){ return v + (v === 1 ? ' pedido' : ' pedidos'); }, [COR_S[0]]) : vazio) +
-      card('Vendas × período', 'Total: ' + fmt(tot), qt ? svgBarras(porMes.map(function(x){ return { rot: x.rot, vals: [x.v] }; }), ['Vendas'], fmt, [COR_S[0]]) : vazio) +
-      card('Vendas × período comparativo', MESES_N[cm[0]] + ' a ' + MESES_N[cm[2]], comp.some(function(g){ return g.vals.some(function(v){ return v > 0; }); }) ? svgBarras(comp, cm.map(function(mm){ return MESES_N[mm]; }), fmt, COR_S) : vazio) +
-      card('Vendas por representada', porRep.length + ' representada' + (porRep.length === 1 ? '' : 's'), porRep.length ? listaBarras(porRep, fmt) : vazio) +
-      (admin && !f.vend ? card('Vendas por vendedor', '', porVend.length ? listaBarras(porVend, fmt) : vazio) : '') +
-    '</div><p class="muted" style="font-size:12px;margin-top:10px">Considera a data em que o pedido foi criado e não conta os cancelados. Os pedidos do Pedido Express entram pelo valor enviado pelo cliente (ou o valor revisado, se você editou).</p>';
+  var porCli = agrupa(function(p){ var c = p.cliente || {}; return soNum(c.doc) || String(c.name || '—').toLowerCase(); }, function(k, p){ var cad = clienteDoPedido(p); return (cad && cad.fantasia) || (p.cliente && p.cliente.name) || '—'; }).slice(0, 6);
+  var stOrd = STATUS.filter(function(x){ return x[0] !== 'cancelado'; }), nSt = {};
+  noPer.forEach(function(p){ nSt[p.status] = (nSt[p.status] || 0) + 1; });
+  var vazio = '<div class="dz-empty">Sem dados neste período</div>';
+  // ---- área (evolução) ----
+  function area(){
+    var W = 720, H = 260, L = 8, Rr = 8, T = 16, B = 28, iw = W-L-Rr, ih = H-T-B, n = pts.length;
+    var max = Math.max.apply(null, pts.map(function(z){ return z.acc; }).concat(ptsA ? ptsA.map(function(z){ return z.acc; }) : []).concat([1])) * 1.12;
+    var X = function(i){ return L + (n > 1 ? i/(n-1)*iw : iw/2); }, Y = function(v){ return T + ih - v/max*ih; };
+    var linha = function(arr){ return arr.map(function(z, i){ return (i ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(z.acc).toFixed(1); }).join(''); };
+    var o = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="dz-svg" id="dzArea"><defs><linearGradient id="dzG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8962a" stop-opacity=".35"/><stop offset="1" stop-color="#c8962a" stop-opacity="0"/></linearGradient></defs>';
+    [0.25, 0.5, 0.75, 1].forEach(function(f2){ var y = T + ih - f2*ih/1.12; o += '<line x1="' + L + '" x2="' + (W-Rr) + '" y1="' + y + '" y2="' + y + '" class="dz-gl"/><text x="' + (L+2) + '" y="' + (y-4) + '" class="dz-ax">' + fmtK(max/1.12*f2) + '</text>'; });
+    if (ptsA) o += '<path d="' + linha(ptsA) + '" class="dz-prev"/>';
+    o += '<path d="' + linha(pts) + 'L' + X(n-1) + ',' + (T+ih) + 'L' + X(0) + ',' + (T+ih) + 'Z" fill="url(#dzG)"/><path d="' + linha(pts) + '" class="dz-line"/>';
+    var passo = Math.ceil(n / 8);
+    pts.forEach(function(z, i){ if (i % passo === 0 || (i === n-1 && (n-1) % passo >= passo/2)) o += '<text x="' + X(i) + '" y="' + (H-8) + '" text-anchor="' + (i === 0 && n > 1 ? 'start' : i === n-1 && n > 1 ? 'end' : 'middle') + '" class="dz-ax">' + z.rot + '</text>'; });
+    o += '<line id="dzX" class="dz-cross" y1="' + T + '" y2="' + (T+ih) + '" x1="-9" x2="-9"/><circle id="dzP" r="5" class="dz-pt" cx="-9" cy="-9"/><rect x="' + L + '" y="' + T + '" width="' + iw + '" height="' + ih + '" fill="transparent" id="dzHit"/></svg><div class="dz-tip" id="dzTip"></div>';
+    area.geo = { X: X, Y: Y, W: W, n: n, L: L, iw: iw };
+    return o;
+  }
+  var maxRep = porRep.length ? porRep[0].v : 1, maxCli = porCli.length ? porCli[0].v : 1, maxSt = Math.max.apply(null, stOrd.map(function(x){ return nSt[x[0]] || 0; }).concat([1]));
+  var html = '<div class="dz">' +
+    '<div class="dz-top"><div><h1>Desempenho</h1><div class="dz-sub">' + dataBR(f.de + 'T12:00').slice(0,8) + ' a ' + dataBR(f.ate + 'T12:00').slice(0,8) + ' · comparado com ' + dataBR(pDe + 'T12:00').slice(0,8) + ' a ' + dataBR(pAte + 'T12:00').slice(0,8) + '</div></div>' +
+      '<div class="dz-ctl"><div class="dz-seg">' + [['mes','Este mês'],['ant','Mês passado'],['tri','3 meses'],['ano','Ano']].map(function(o){ return '<button data-per="' + o[0] + '" class="' + (f.per === o[0] ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      '<input class="in dz-dt" type="date" id="dDe" value="' + f.de + '"><span class="muted">→</span><input class="in dz-dt" type="date" id="dAte" value="' + f.ate + '">' +
+      (admin ? '<select class="in dz-dt" id="dVend"><option value="">Todos vendedores</option>' + Object.keys(CFG.vendedores).map(function(k){ return '<option value="' + k + '"' + (f.vend === k ? ' selected' : '') + '>' + esc(CFG.vendedores[k]) + '</option>'; }).join('') + '</select>' : '') + '</div></div>' +
+    '<div class="dz-kpis">' +
+      '<div class="dz-k hero"><span>Vendas</span><b>' + fmt(R.v) + '</b>' + delta(R.v, A.v) + '<small>antes: ' + fmt(A.v) + '</small></div>' +
+      '<div class="dz-k"><span>Pedidos</span><b>' + R.q + '</b>' + delta(R.q, A.q) + '<small>antes: ' + A.q + '</small></div>' +
+      '<div class="dz-k"><span>Ticket médio</span><b>' + (R.q ? fmt(R.t) : '—') + '</b>' + delta(R.t, A.t) + '<small>antes: ' + (A.q ? fmt(A.t) : '—') + '</small></div>' +
+      '<div class="dz-k"><span>Clientes atendidos</span><b>' + R.c + '</b>' + delta(R.c, A.c) + '<small>antes: ' + A.c + '</small></div>' +
+    '</div>' +
+    '<div class="dz-grid">' +
+      '<div class="dz-c span2"><div class="dz-h"><div><b>Evolução das vendas</b><span>' + (porDia ? 'acumulado no período' : 'por mês') + '</span></div>' + (ptsA ? '<div class="dz-lg"><i class="l1"></i>Este período<i class="l2"></i>Período anterior</div>' : '') + '</div>' + (noPer.length || (ptsA && ant.length) ? area() : vazio) + '</div>' +
+      '<div class="dz-c"><div class="dz-h"><div><b>Top representadas</b><span>participação nas vendas</span></div></div>' + (porRep.length ? '<div class="dz-rank">' + porRep.map(function(x){ var lg = logoRep(x.k); return '<div class="dz-ri">' + (lg ? '<img src="' + esc(lg.url) + '" alt="">' : '<em>' + esc(x.n.replace(/^Grupo /,'').slice(0,2).toUpperCase()) + '</em>') + '<div class="dz-rb"><div class="dz-rl"><span>' + esc(x.n) + '</span><b>' + fmt(x.v) + '</b></div><div class="dz-bar"><i style="width:' + (x.v/maxRep*100) + '%"></i></div><small>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '% · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</small></div></div>'; }).join('') + '</div>' : vazio) + '</div>' +
+      '<div class="dz-c span2"><div class="dz-h"><div><b>Comparativo anual</b><span>' + MESES_N[cm[0]] + ' a ' + MESES_N[cm[2]] + ' em ' + anos.join(', ') + '</span></div></div>' + (comp.some(function(g){ return g.vals.some(function(v){ return v > 0; }); }) ? svgBarras(comp, cm.map(function(mm){ return MESES_N[mm]; }), fmt, COR_S) : vazio) + '</div>' +
+      '<div class="dz-c"><div class="dz-h"><div><b>Pedidos por etapa</b><span>status atual dos pedidos do período</span></div></div>' + (noPer.length ? '<div class="dz-fun">' + stOrd.map(function(x){ var n2 = nSt[x[0]] || 0; return '<div><span>' + esc(x[1]) + '</span><div class="dz-bar fs-' + x[0] + '"><i style="width:' + (n2/maxSt*100) + '%"></i></div><b>' + n2 + '</b></div>'; }).join('') + '</div>' : vazio) + '</div>' +
+      '<div class="dz-c"><div class="dz-h"><div><b>Top clientes</b><span>maiores compras no período</span></div></div>' + (porCli.length ? '<ol class="dz-cli">' + porCli.map(function(x){ return '<li><span>' + esc(x.n) + '</span><b>' + fmt(x.v) + '</b><div class="dz-bar thin"><i style="width:' + (x.v/maxCli*100) + '%"></i></div></li>'; }).join('') + '</ol>' : vazio) + '</div>' +
+      (admin && !f.vend ? '<div class="dz-c"><div class="dz-h"><div><b>Vendedores</b><span>vendas no período</span></div></div>' + (porVend.length ? '<div class="dz-vend">' + porVend.map(function(x){ return '<div><em>' + esc(x.n.slice(0,1)) + '</em><div><b>' + esc(x.n) + '</b><span>' + fmt(x.v) + ' · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</span></div><strong>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '%</strong></div>'; }).join('') + '</div>' : vazio) + '</div>' : '') +
+    '</div><p class="dz-nota">Não conta pedidos cancelados. Cada pedido entra pela data em que foi criado; os do Pedido Express pelo valor enviado pelo cliente (ou o revisado, se você editou).</p></div>';
   casca(html);
-  var set = function(de, ate){ f.de = isoDia(de); f.ate = isoDia(ate); telaDesempenho(); };
-  document.getElementById('dDe').onchange = function(){ if (this.value){ f.de = this.value; if (f.ate < f.de) f.ate = f.de; telaDesempenho(); } };
-  document.getElementById('dAte').onchange = function(){ if (this.value){ f.ate = this.value; if (f.de > f.ate) f.de = f.ate; telaDesempenho(); } };
+  // tooltip da área
+  var hit = document.getElementById('dzHit');
+  if (hit && area.geo){
+    var g2 = area.geo, svg = document.getElementById('dzArea'), tip = document.getElementById('dzTip'), cx = document.getElementById('dzX'), pt = document.getElementById('dzP');
+    var mover = function(ev){
+      var r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * g2.W, i = Math.max(0, Math.min(g2.n-1, Math.round((x - g2.L) / g2.iw * (g2.n-1))));
+      var z = pts[i], px = g2.X(i), py = g2.Y(z.acc);
+      cx.setAttribute('x1', px); cx.setAttribute('x2', px); pt.setAttribute('cx', px); pt.setAttribute('cy', py);
+      tip.innerHTML = '<b>' + z.rot + '</b>' + (porDia ? '<div>No dia: ' + fmt(z.v) + ' · ' + z.q + ' ped.</div><div>Acumulado: <b>' + fmt(z.acc) + '</b></div>' + (ptsA ? '<div class="muted">Período anterior: ' + fmt(ptsA[i].acc) + '</div>' : '') : '<div>' + fmt(z.v) + ' · ' + z.q + ' pedidos</div>');
+      tip.style.display = 'block'; var tx = px / g2.W * r.width; var cr = svg.parentNode.getBoundingClientRect(); tip.style.left = (r.left - cr.left + Math.min(Math.max(tx, 80), r.width - 80)) + 'px'; tip.style.top = (r.top - cr.top + py / 260 * r.height - 12) + 'px';
+    };
+    hit.addEventListener('pointermove', mover); hit.addEventListener('pointerdown', mover);
+    hit.addEventListener('pointerleave', function(){ tip.style.display = 'none'; cx.setAttribute('x1', -9); cx.setAttribute('x2', -9); pt.setAttribute('cx', -9); });
+  }
+  var set = function(de, ate, per){ f.de = isoDia(de); f.ate = isoDia(ate); f.per = per; telaDesempenho(); };
+  document.getElementById('dDe').onchange = function(){ if (this.value){ f.de = this.value; f.per = ''; if (f.ate < f.de) f.ate = f.de; telaDesempenho(); } };
+  document.getElementById('dAte').onchange = function(){ if (this.value){ f.ate = this.value; f.per = ''; if (f.de > f.ate) f.de = f.ate; telaDesempenho(); } };
   var dv = document.getElementById('dVend'); if (dv) dv.onchange = function(){ f.vend = this.value; telaDesempenho(); };
   $app.querySelectorAll('[data-per]').forEach(function(b){ b.onclick = function(){
     var a = hoje.getFullYear(), m2 = hoje.getMonth(), k = b.dataset.per;
-    if (k === 'mes') set(new Date(a, m2, 1), new Date(a, m2+1, 0));
-    if (k === 'ant') set(new Date(a, m2-1, 1), new Date(a, m2, 0));
-    if (k === 'tri') set(new Date(a, m2-2, 1), new Date(a, m2+1, 0));
-    if (k === 'ano') set(new Date(a, 0, 1), new Date(a, 11, 31));
+    if (k === 'mes') set(new Date(a, m2, 1), new Date(a, m2+1, 0), k);
+    if (k === 'ant') set(new Date(a, m2-1, 1), new Date(a, m2, 0), k);
+    if (k === 'tri') set(new Date(a, m2-2, 1), new Date(a, m2+1, 0), k);
+    if (k === 'ano') set(new Date(a, 0, 1), new Date(a, 11, 31), k);
   }; });
 }
 

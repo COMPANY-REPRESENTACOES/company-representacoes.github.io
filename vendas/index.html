@@ -71,6 +71,33 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .chip .ct{opacity:.7;font-weight:600;margin-left:2px}
 .chips.wrap{flex-wrap:wrap;overflow:visible}
 .chip.sub{font-size:12px;padding:5px 10px;font-weight:600}
+.dz h1{margin:0;font-size:26px;letter-spacing:-.4px}.dz-sub{color:var(--muted);font-size:13px;margin-top:2px}
+.dz-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.dz-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dz-seg{display:inline-flex;background:#e9e7e2;border-radius:10px;padding:3px}.dz-seg button{border:0;background:transparent;padding:7px 12px;border-radius:8px;font-weight:700;font-size:13px;color:#555;cursor:pointer}.dz-seg button.on{background:#1b1b1d;color:#f2c14e;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.in.dz-dt{width:auto;height:36px;padding:5px 10px;font-size:13.5px;border-radius:10px}
+.dz-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+.dz-k{background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05);position:relative;display:flex;flex-direction:column;gap:2px}
+.dz-k span{font-size:12.5px;color:var(--muted);font-weight:600}.dz-k b{font-size:24px;letter-spacing:-.4px;line-height:1.25}.dz-k small{color:var(--muted);font-size:12px}
+.dz-k.hero{background:linear-gradient(135deg,#1b1b1d 0%,#2c2a25 100%);color:#fff}.dz-k.hero span,.dz-k.hero small{color:#c9c4b5}.dz-k.hero b{color:#f2c14e}
+.dz-d{position:absolute;top:14px;right:14px;font-size:12px;font-weight:800;padding:3px 8px;border-radius:999px;background:#eee;color:#555}.dz-d.up{background:#dcf5e6;color:#11743b}.hero .dz-d.up{background:rgba(70,200,120,.18);color:#7fe0a5}.hero .dz-d.dn{background:rgba(240,80,60,.2);color:#ff9d8f}.dz-d.dn{background:#fde4e1;color:#b42318}
+.dz-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}.dz-c{background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05);min-width:0}
+.dz-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}.dz-h b{font-size:15.5px}.dz-h span{display:block;font-size:12.5px;color:var(--muted)}
+.dz-lg{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}.dz-lg i{display:inline-block;width:16px;height:3px;border-radius:2px;margin-left:8px}.dz-lg .l1{background:#b8821e}.dz-lg .l2{background:repeating-linear-gradient(90deg,#9a9892 0 4px,transparent 4px 7px)}
+#dzArea{width:100%;height:auto;display:block;touch-action:pan-y}.dz-c{position:relative}.dz-gl{stroke:#efede8}.dz-ax{font-size:11.5px;fill:#8a8984}.dz-line{fill:none;stroke:#b8821e;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}.dz-prev{fill:none;stroke:#a9a79f;stroke-width:2;stroke-dasharray:5 4}
+.dz-cross{stroke:#1b1b1d;stroke-width:1;stroke-dasharray:3 3}.dz-pt{fill:#fff;stroke:#b8821e;stroke-width:3}
+.dz-tip{display:none;position:absolute;transform:translate(-50%,-100%);background:#1b1b1d;color:#fff;font-size:12.5px;padding:8px 10px;border-radius:10px;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.2)}.dz-tip .muted{color:#bbb}
+.dz-bar{height:8px;background:#f0eee9;border-radius:99px;overflow:hidden}.dz-bar i{display:block;height:100%;background:linear-gradient(90deg,#d9a93a,#b8821e);border-radius:99px}.dz-bar.thin{height:5px}
+.dz-rank{display:flex;flex-direction:column;gap:12px}.dz-ri{display:flex;gap:10px;align-items:center}.dz-ri img,.dz-ri em{width:42px;height:42px;border-radius:12px;object-fit:contain;background:#faf9f6;border:1px solid #ece9e2;flex:none}.dz-ri em{display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;color:#b8821e}
+.dz-rb{flex:1;min-width:0}.dz-rl{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;margin-bottom:4px}.dz-rl span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dz-rb small{color:var(--muted);font-size:11.5px}
+.dz-fun{display:flex;flex-direction:column;gap:10px}.dz-fun>div{display:grid;grid-template-columns:120px 1fr 28px;gap:8px;align-items:center;font-size:13px}.dz-fun b{text-align:right}
+.dz-fun .fs-recebido i{background:#9aa4b2}.dz-fun .fs-espelho_enviado i{background:#2a78d6}.dz-fun .fs-enviado_fabrica i{background:#d9a93a}.dz-fun .fs-faturado i{background:#1baf7a}
+.dz-cli{margin:0;padding:0;list-style:none;counter-reset:c;display:flex;flex-direction:column;gap:10px}.dz-cli li{counter-increment:c;display:grid;grid-template-columns:22px 1fr auto;gap:4px 8px;align-items:center;font-size:13.5px}.dz-cli li:before{content:counter(c);font-weight:800;color:#b8821e;font-size:12px}.dz-cli span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dz-cli .dz-bar{grid-column:2/4}
+.dz-vend{display:flex;flex-direction:column;gap:12px}.dz-vend>div{display:flex;align-items:center;gap:10px}.dz-vend em{width:38px;height:38px;border-radius:50%;background:#1b1b1d;color:#f2c14e;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800}.dz-vend>div>div{flex:1}.dz-vend b{display:block;font-size:14px}.dz-vend span{font-size:12.5px;color:var(--muted)}.dz-vend strong{font-size:18px}
+.dz-empty{color:var(--muted);text-align:center;padding:36px 8px;font-size:13.5px}.dz-nota{color:var(--muted);font-size:12px;margin-top:12px}
+.dz .dv-svg .dv-bar{rx:4}
+@media (max-width:600px){.dz-d{position:static;align-self:flex-start;margin:2px 0}.dz-h{flex-wrap:wrap}.dz-k{padding:14px}}
+@media (max-width:900px){.dz-kpis{grid-template-columns:1fr 1fr}.dz-grid{grid-template-columns:1fr}.dz-k b{font-size:20px}}
 .dv-top{align-items:flex-end;gap:8px;flex-wrap:wrap}.dv-fs{display:flex;gap:8px;flex-wrap:wrap}@media (max-width:600px){.dv-top h1{flex-basis:100%}}
 .dv-f{display:flex;flex-direction:column;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;gap:2px}.dv-f .in{height:36px;padding:5px 8px;font-size:14px;text-transform:none;color:var(--text,#111)}
 .dv-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.dv-kpis .card{padding:12px 14px}.dv-kpis span{display:block;font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase}.dv-kpis b{font-size:22px}
@@ -272,6 +299,6 @@ label.btn{cursor:pointer}
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261123z"></script>
+<script src="app.js?v=20261124b"></script>
 </body>
 </html>
