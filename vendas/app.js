@@ -63,8 +63,21 @@ function regraBox(p){
     (av.length ? av.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') : '') +
     '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': pedido mínimo ' + fmt(r.minimo) + (r.avistas ? ' · à vista (PIX ou 15 dd) ' + r.avistas[0].desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>';
 }
+/* parcelas do prazo escolhido (ex.: 30/60/90 → 3 parcelas iguais; centavos na última) */
+function parcelasDe(p){
+  if (!p.prazo || eAvista(p) || !/^\s*\d+(\s*\/\s*\d+)*\s*(dd|d|dias?)?\s*$/i.test(p.prazo)) return [];
+  var dias = p.prazo.match(/\d+/g).map(Number), tot = totalItens(p.itens), n = dias.length;
+  if (!tot) return [];
+  var v = Math.floor(tot / n * 100) / 100, ult = r2(tot - v * (n - 1));
+  return dias.map(function(d, i){ return { n: i + 1, dias: d, valor: i === n - 1 ? ult : v }; });
+}
+function parcelasBox(p){
+  var ps = parcelasDe(p); if (!ps.length) return '';
+  return '<div class="parc"><div class="pt">Parcelas — ' + esc(p.prazo) + '</div><div class="pg">' + ps.map(function(x){ return '<div><span>' + x.n + 'ª parcela · ' + x.dias + ' dias</span><b>' + fmt(x.valor) + '</b></div>'; }).join('') + '</div></div>';
+}
 function atualizaRegra(){
   if (!ED) return; var el = document.getElementById('eRegra'); if (el) el.innerHTML = regraBox(ED.p);
+  var ep = document.getElementById('eParc'); if (ep) ep.innerHTML = parcelasBox(ED.p);
   var pz = document.getElementById('ePrazo'); if (pz && pz.tagName === 'SELECT'){ var tmp = document.createElement('div'); tmp.innerHTML = prazoCampo(ED.p, pz.disabled); pz.innerHTML = tmp.firstChild.innerHTML; }
 }
 var PRAZOS = ['À vista','28 dias','30/60','30/60/90','28/56/84','30/45/60','30/45/60/75','15/30/45/60/75','30/45/60/75/90','15/30/45/60/75/90'];
@@ -454,6 +467,7 @@ function totalItens(itens){ return r2(itens.reduce(function(s,i){ return s + r2(
 function telaEditor(){
   var p = ED.p, c = p.cliente || {}, g = grupo(p.grupo), orig = p.original;
   var travado = p.status === 'faturado' || p.status === 'cancelado';
+  var itTrav = travado || (!ED.novo && !ED.editItens);
   var html = '<div class="row"><a class="btn sm" href="#pedidos">← Pedidos</a><div class="grow"></div>' +
       (p.origem === 'express' ? '<span class="badge b-express">Pedido Express</span>' : '<span class="badge">Lançado no app</span>') + '</div>' +
     '<div class="row" style="margin-top:12px;align-items:center"><h1 class="grow" style="margin:0">' + (ED.novo ? 'Novo pedido' : 'Pedido ' + esc(p.numero)) + '</h1>' +
@@ -465,7 +479,7 @@ function telaEditor(){
     (travado ? '<div class="note info">Pedido ' + esc(STATUS_NOME[p.status]) + '. Para editar, mude o status.</div>' : '') +
     '<div class="card pad"><div class="grid2">' +
       '<div><label class="lb">Status</label><select class="in" id="eSt">' + STATUS.map(function(s){ return '<option value="' + s[0] + '"' + (p.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>' +
-      '<div><label class="lb">Política de preço</label><select class="in" id="ePol"' + (travado ? ' disabled' : '') + '>' + (g ? g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (politicaId(p.grupo, p.politica) === x.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') : '<option>' + esc(p.politica) + '</option>') + '</select></div>' +
+      '<div><label class="lb">Política de preço</label><select class="in" id="ePol"' + (itTrav ? ' disabled title="Toque em Editar itens para mudar a política"' : '') + '>' + (g ? g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (politicaId(p.grupo, p.politica) === x.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') : '<option>' + esc(p.politica) + '</option>') + '</select></div>' +
       '<div><label class="lb">Cliente / razão social</label><input class="in" data-c="name" value="' + esc(c.name) + '"></div>' +
       '<div><label class="lb">CNPJ / CPF</label><input class="in" data-c="doc" inputmode="numeric" value="' + esc(c.doc) + '"></div>' +
       '<div><label class="lb">Telefone / WhatsApp</label><input class="in" data-c="phone" type="tel" value="' + esc(c.phone) + '"></div>' +
@@ -473,9 +487,10 @@ function telaEditor(){
       '<div><label class="lb">Transportadora</label><input class="in" data-c="carrier" value="' + esc(c.carrier) + '"></div>' +
       '<div><label class="lb">Prazo de pagamento</label>' + prazoCampo(p, travado) + '</div>' +
     '</div><label class="lb">Observação</label><textarea class="in" id="eObs" rows="2">' + esc(p.obs) + '</textarea></div>' +
-    '<div class="row" style="margin-top:16px"><h2 class="grow" style="margin:0">Itens (' + p.itens.length + ')</h2>' + (travado ? '' : '<button class="btn sm pri" id="eAdd">+ Adicionar produto</button>') + '</div>' +
-    '<div class="card" style="margin-top:8px"><div class="pad" id="eItens">' + (p.itens.length ? p.itens.map(function(it, i){ return linhaItem(p, it, i, travado); }).join('') : '<div class="empty">Nenhum item. Toque em “Adicionar produto”.</div>') + '</div>' +
-      '<div class="totbar"><span>Total</span><span id="eTot">' + fmt(totalItens(p.itens)) + '</span></div><div id="eRegra">' + regraBox(p) + '</div></div>' +
+    '<div class="row" style="margin-top:16px"><h2 class="grow" style="margin:0">Itens (' + p.itens.length + ')</h2>' + (travado || ED.novo ? '' : (ED.editItens ? '<button class="btn sm" id="eEdIt">🔒 Travar itens</button>' : '<button class="btn sm edit-it" id="eEdIt">✎ Editar itens</button>')) + (itTrav ? '' : '<button class="btn sm pri" id="eAdd">+ Adicionar produto</button>') + '</div>' +
+    (!travado && itTrav ? '<div class="muted" style="font-size:12.5px;margin-top:4px">Itens travados para evitar alteração por engano. Toque em ✎ Editar itens para adicionar, remover ou mudar quantidade e preço.</div>' : '') +
+    '<div class="card" style="margin-top:8px"><div class="pad" id="eItens">' + (p.itens.length ? p.itens.map(function(it, i){ return linhaItem(p, it, i, itTrav); }).join('') : '<div class="empty">Nenhum item. Toque em “Adicionar produto”.</div>') + '</div>' +
+      '<div class="totbar"><span>Total</span><span id="eTot">' + fmt(totalItens(p.itens)) + '</span></div><div id="eParc">' + parcelasBox(p) + '</div><div id="eRegra">' + regraBox(p) + '</div></div>' +
     (orig && !ED.novo ? '<div class="row" style="margin-top:12px"><button class="btn sm" id="eOrig">Ver o que o cliente enviou' + (r2(orig.total) !== totalItens(p.itens) ? ' (total original ' + fmt(orig.total) + ')' : '') + '</button>' +
       '<button class="btn sm" id="eHist">Histórico de alterações</button></div>' : '');
   var acoes = '<button class="btn" id="ePdf">Gerar espelho PDF</button><button class="btn" id="eMail">✉ Enviar por e-mail</button><button class="btn wa" id="eWa">Enviar por WhatsApp</button><button class="btn pri" id="eSalvar">' + (ED.novo ? 'Salvar pedido' : 'Salvar alterações') + '</button>';
@@ -498,7 +513,8 @@ function telaEditor(){
   document.getElementById('eWa').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } if (!confereRegra(ED.p, 'Enviar')) return; comFotos(ED.p, function(){ enviarWhatsApp(ED.p); }); };
   var bo = document.getElementById('eOrig'); if (bo) bo.onclick = verOriginal;
   var bh = document.getElementById('eHist'); if (bh) bh.onclick = verHistorico;
-  ligarItens(travado);
+  ligarItens(itTrav);
+  var bEd = document.getElementById('eEdIt'); if (bEd) bEd.onclick = function(){ ED.editItens = !ED.editItens; telaEditor(); };
 }
 function linhaItem(p, it, i, travado){
   var img = imgDe(p.grupo, it.cod);
@@ -1106,6 +1122,16 @@ function montarPdf(p, modo){
   doc.text(M, y + 26, 'Política ' + politicaNome(p.grupo, p.politica) + ' · Total em preço de tabela ' + fmt(somaTab) + ' · Descontos ' + fmt(Math.max(0, somaTab - tot)), { size: 8, color: MUTED });
   if (eAvista(p)){ doc.text(M, y + 40, 'Preços já com ' + avistaDe(p).desc + '% de desconto à vista (sem o desconto: ' + fmt(totBruto(p)) + ')', { size: 9, bold: true, color: RED }); y += 8; }
   y += 56;
+  var pcs = parcelasDe(p);
+  if (pcs.length){
+    if (y + 20 + Math.ceil(pcs.length/4)*16 > BOTTOM){ doc.addPage(); y = M; }
+    doc.text(M, y, 'PARCELAS (' + p.prazo + ')', { size: 7.5, bold: true, color: RED }); y += 6;
+    var pw = CW / 4, lh = 16, nl = Math.ceil(pcs.length/4);
+    doc.rect(M, y, CW, nl*lh + 8, null, LINE, 0.8);
+    pcs.forEach(function(x, i){ var cx = M + (i % 4) * pw + 10, cy = y + 15 + Math.floor(i/4) * lh;
+      doc.text(cx, cy, x.n + 'ª · ' + x.dias + ' dias:', { size: 8.5, color: MUTED }); doc.text(cx + pw - 20, cy, fmt(x.valor), { size: 9, bold: true, align: 'right' }); });
+    y += nl*lh + 24;
+  }
   if (obs.length){ doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED }); y += 6; var oh = obs.length*12 + 12; doc.rect(M, y, CW, oh, null, LINE, 0.8); obs.forEach(function(l,i){ doc.text(M+10, y+15+i*12, l, { size: 9 }); }); y += oh + 16; }
   y = Math.max(y + 30, Math.min(BOTTOM - 20, y + 40)); var sw = (CW - 40)/2;
   doc.line(M, y, M+sw, y, '#9a9892', 0.7); doc.line(M+sw+40, y, M+CW, y, '#9a9892', 0.7);
