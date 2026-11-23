@@ -393,7 +393,8 @@ function telaEditor(){
   var travado = p.status === 'faturado' || p.status === 'cancelado';
   var html = '<div class="row"><a class="btn sm" href="#pedidos">← Pedidos</a><div class="grow"></div>' +
       (p.origem === 'express' ? '<span class="badge b-express">Pedido Express</span>' : '<span class="badge">Lançado no app</span>') + '</div>' +
-    '<h1 style="margin-top:12px">' + (ED.novo ? 'Novo pedido' : 'Pedido ' + esc(p.numero)) + '</h1>' +
+    '<div class="row" style="margin-top:12px;align-items:center"><h1 class="grow" style="margin:0">' + (ED.novo ? 'Novo pedido' : 'Pedido ' + esc(p.numero)) + '</h1>' +
+      (logoRep(p.grupo) ? '<img class="ped-logo" src="' + esc(logoRep(p.grupo).url) + '" alt="' + esc(g ? g.nome : '') + '">' : '') + '</div><div style="height:10px"></div>' +
     '<div class="muted" style="margin-top:-8px;margin-bottom:10px">' + esc(g ? g.nome : p.grupo) + ' · ' + esc(politicaNome(p.grupo, p.politica)) + ' · ' + esc(CFG.vendedores[p.vendedor_codigo] || p.vendedor_codigo) +
       (p.criado_em ? ' · ' + dataBR(p.criado_em) : '') + '</div>' +
     (pendentes(p.id) ? '<div class="note warn">Alterações guardadas neste aparelho. Sobem para o sistema assim que houver internet.</div>' : '') +
@@ -939,6 +940,9 @@ function montarPdf(p, modo){
   var comp = logoToJpeg(document.getElementById('compLogo'), 500);
   if (comp){ var ch = 50, cw = comp.w * ch / comp.h; doc.image(doc.addJpeg(comp.url, comp.w, comp.h), M, M - 6, cw, ch); }
   var g = grupo(p.grupo), c = p.cliente || {};
+  var rl = logoRep(p.grupo);
+  if (rl){ var lh = 46, lw = rl.w * lh / rl.h; if (lw > 150){ lw = 150; lh = rl.h * lw / rl.w; }
+    doc.image(doc.addJpeg(rl.url, rl.w, rl.h), W/2 - lw/2, M - 6 + (50 - lh)/2, lw, lh); }
   doc.text(W - M, M + 10, (g ? g.nome : p.grupo).toUpperCase(), { size: 12, bold: true, color: RED, align: 'right' });
   doc.text(W - M, M + 24, 'Política: ' + politicaNome(p.grupo, p.politica), { size: 8.5, color: MUTED, align: 'right' });
   var y = 104;
@@ -1146,6 +1150,27 @@ function listaReps(){
   (S.reps || []).forEach(function(r){ m[r.id] = Object.assign({}, m[r.id] || {}, r, { dados: r.dados || {} }); });
   return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
 }
+/* logomarca da representada: guardada como JPEG (data URL) dentro do cadastro → funciona offline no app e no PDF */
+function logoRep(gid){ var r = acharRep(gid); return r && r.dados && r.dados.logo && r.dados.logo.url ? r.dados.logo : null; }
+function lerLogo(file){
+  return new Promise(function(res, rej){
+    var fr = new FileReader();
+    fr.onerror = function(){ rej(new Error('não foi possível ler o arquivo')); };
+    fr.onload = function(){
+      var im = new Image();
+      im.onerror = function(){ rej(new Error('o arquivo não é uma imagem válida')); };
+      im.onload = function(){
+        var r = Math.min(1, 600 / Math.max(im.naturalWidth, im.naturalHeight));
+        var w = Math.max(1, Math.round(im.naturalWidth * r)), h = Math.max(1, Math.round(im.naturalHeight * r));
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(im, 0, 0, w, h);
+        res({ url: c.toDataURL('image/jpeg', 0.9), w: w, h: h, nome: file.name });
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
 function acharRep(id){ return listaReps().find(function(r){ return r.id === id; }); }
 function soDig(s){ return String(s||'').replace(/\D/g,''); }
 function linkFone(f){ var d = soDig(f); if (!d) return ''; var w = d.length <= 11 ? '55' + d : d;
@@ -1169,7 +1194,7 @@ function telaRepresentadas(){
     (S.repErr ? '<div class="note warn">' + esc(S.repErr) + '</div>' : '') +
     '<div class="list">' + l.map(function(r){
       var d = r.dados || {}, an = anexosRep(d), temOf = d.oferta_texto || (an.oferta && an.oferta.length);
-      return '<div class="card pad"><div class="row"><div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
+      return '<div class="card pad"><div class="row">' + (d.logo && d.logo.url ? '<img class="rep-logo-mini" src="' + esc(d.logo.url) + '" alt="">' : '') + '<div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
         (function(){ var t = REP_ANEXOS.reduce(function(s, c){ return s + (an[c[0]] || []).length; }, 0); return t ? ' <span class="badge">📎 ' + t + ' anexo' + (t > 1 ? 's' : '') + '</span>' : ''; })() +
         '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
         '<div class="row" style="gap:6px"><a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
@@ -1184,6 +1209,7 @@ function telaRepresentada(arg){
   if (editar) return editarRep(r, nova);
   var d = r.dados || {}, an = anexosRep(d);
   var html = '<div class="row"><a class="btn sm" href="#representadas">← Representadas</a><h1 style="margin:4px 0" class="grow">' + esc(r.nome) + '</h1><a class="btn pri" href="#representada/' + esc(r.id) + '/editar">Editar</a></div>' +
+    (d.logo && d.logo.url ? '<div class="card pad" style="margin-top:10px;text-align:center"><img class="rep-logo-big" src="' + esc(d.logo.url) + '" alt="Logomarca ' + esc(r.nome) + '" data-zoom="' + esc(d.logo.url) + '" data-leg="' + esc(r.nome) + '"></div>' : '') +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">⭐ Oferta do mês</h2>' +
       (d.oferta_texto || (an.oferta && an.oferta.length) ? txtBloco(d.oferta_texto) + arquivosHtml(an.oferta) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar para colocar texto, foto ou PDF.</span>') + '</div>' +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">Dados da representada</h2>' +
@@ -1220,6 +1246,9 @@ function editarRep(r, nova){
   function inp(id, v, extra){ return '<input class="in" id="' + id + '" value="' + esc(v) + '"' + (extra||'') + '>'; }
   var html = '<div class="row"><a class="btn sm" href="' + (nova ? '#representadas' : '#representada/' + esc(r.id)) + '">← Voltar</a><h1 style="margin:4px 0">' + (nova ? 'Nova representada' : 'Editar · ' + esc(r.nome)) + '</h1></div>' +
     '<div class="card pad cform" style="margin-top:10px">' +
+    '<h2 class="sec">Logomarca</h2>' +
+    f('Logomarca', '<div id="rLogoBox"></div><input type="file" id="rLogoUp" accept="image/*" hidden>' +
+      '<div class="muted" style="font-size:12.5px;margin-top:4px">Aparece no cabeçalho do pedido e no PDF. Use JPG ou PNG (de preferência com fundo branco).</div>') +
     '<h2 class="sec">Dados da representada</h2>' +
     f('Nome (como aparece no programa) <span class="req">*</span>', inp('rNome', r.nome, ' maxlength="80"')) +
     f('Razão social', inp('rRazao', d.razao, ' maxlength="150"')) +
@@ -1245,6 +1274,19 @@ function editarRep(r, nova){
     el('rN_' + cat).textContent = n; el('rN2_' + cat).textContent = n; el('rN_' + cat).classList.toggle('on', n > 0); el('rG_' + cat).hidden = !n;
     w.querySelectorAll('[data-rmarq]').forEach(function(b){ b.onclick = function(){ d.anexos[cat].splice(+b.dataset.rmarq, 1); desenhaArqs(cat); }; }); }
   REP_ANEXOS.forEach(function(c){ desenhaArqs(c[0]); });
+  function desenhaLogo(){
+    var tem = d.logo && d.logo.url;
+    el('rLogoBox').innerHTML = (tem ? '<div class="rep-logo-ed"><img src="' + esc(d.logo.url) + '" alt="Logomarca"></div>' : '<div class="rep-logo-ed vazio">Sem logomarca</div>') +
+      '<div class="row" style="gap:6px;margin-top:8px">' + (tem ? '<button type="button" class="btn sm bad" id="rLogoRm">Remover logomarca</button>' : '') +
+      '<label class="btn sm" for="rLogoUp">' + (tem ? 'Trocar logomarca' : '📎 Anexar logomarca') + '</label></div>';
+    var rm = el('rLogoRm'); if (rm) rm.onclick = function(){ delete d.logo; desenhaLogo(); el('rUpSt').textContent = 'Logomarca removida — lembre de salvar.'; };
+  }
+  desenhaLogo();
+  el('rLogoUp').onchange = function(){
+    var file = this.files && this.files[0]; this.value = ''; if (!file) return;
+    if (file.size > 15 * 1024 * 1024){ toast('Imagem muito grande (limite 15 MB).'); return; }
+    lerLogo(file).then(function(lg){ d.logo = lg; desenhaLogo(); toast('Logomarca pronta — lembre de salvar.'); }, function(e){ toast('Logomarca: ' + e.message, 5000); });
+  };
   var enviando = 0;
   $app.querySelectorAll('[data-up]').forEach(function(inp){ inp.onchange = function(){
     var cat = inp.dataset.up, st = el('rUpSt');
