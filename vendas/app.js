@@ -557,14 +557,14 @@ function abrirCatalogo(){
     var lista = '';
     if (q) lista = itens.map(function(x){ return cartao(x, q); }).join('');
     else { var atual = null; itens.forEach(function(x){ var c = x.i.cat || 'Outros'; if (c !== atual){ atual = c; lista += '<div class="cat-sec">' + esc(c) + '</div>'; } lista += cartao(x, q); }); }
-    m.body.innerHTML = '<div class="cat-top"><div class="cat-sels"><input class="in" id="cQ" type="search" placeholder="🔍 Buscar código ou nome" value="' + esc(st.q) + '">' +
+    m.body.innerHTML = '<div class="cat-top"><div class="cat-sels"><input class="in" id="cQ" type="search" placeholder="🔍 Buscar" title="Buscar por código ou nome em todas as linhas" value="' + esc(st.q) + '">' +
       
       (g.marcas.length > 1 ? '<select class="in" id="cM" title="Linha de produtos">' + g.marcas.map(function(mm){ return '<option value="' + mm.id + '"' + (st.marca === mm.id ? ' selected' : '') + '>' + esc(mm.nome) + ' (' + mm.itens.length + ')</option>'; }).join('') + '</select>' : '') +
       (q ? '' : '<select class="in" id="cC" title="Categoria"><option value="">Categoria: todas (' + mar.itens.length + ')</option>' +
         tags.map(function(t){ var v = '#tag:' + t.nome; return '<option value="' + esc(v) + '"' + (st.cat === v ? ' selected' : '') + '>★ ' + esc(t.nome) + ' (' + t.n + ')</option>'; }).join('') +
         cats.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.cat === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select>' +
         (subs.length > 1 ? '<select class="in" id="cS" title="Subcategoria"><option value="">Subcategoria: todas</option>' + subs.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.sub === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select>' : '')) +
-      '<button class="chip so" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div>' +
+      '<button class="chip so" data-so aria-pressed="' + st.so + '" title="Só disponíveis"><span class="lg">Só disponíveis</span><span class="sh">Disp.</span></button></div>' +
       '<div class="muted cat-info">' + esc(q ? 'Resultado da busca em todas as linhas' : (mar.sub || '')) + ' · preços da política ' + esc(politicaNome(p.grupo, pid)) + '</div></div>' +
       '<div class="cat-list">' + lista + '</div>' + (itens.length ? '' : '<div class="empty">Nada encontrado.</div>') +
       (corte ? '<div class="muted" style="text-align:center;padding:10px">Mostrando os primeiros ' + LIM + '. Escolha uma categoria ou use a busca para ver os demais.</div>' : '');

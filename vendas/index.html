@@ -71,10 +71,11 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .chip .ct{opacity:.7;font-weight:600;margin-left:2px}
 .chips.wrap{flex-wrap:wrap;overflow:visible}
 .chip.sub{font-size:12px;padding:5px 10px;font-weight:600}
-.cat-sels{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.cat-sels .in{padding:6px 10px;font-size:14px;height:36px}
-.cat-sels #cQ{flex:1 1 200px;max-width:280px}.cat-sels select.in{flex:1 1 170px;width:auto;max-width:300px}
-.cat-sels .chip.so{padding:6px 12px;height:36px;white-space:nowrap}
+.cat-sels{display:flex;flex-wrap:nowrap;gap:6px;align-items:center}
+.cat-sels .in{padding:6px 10px;font-size:14px;height:36px;min-width:0}
+.cat-sels #cQ{flex:1 1 0;max-width:280px}.cat-sels select.in{flex:1 1 0;width:auto;max-width:300px}
+.cat-sels .chip.so{padding:6px 12px;height:36px;white-space:nowrap;flex:0 0 auto}
+.cat-sels .chip.so .sh{display:none}
 .cat-info{font-size:11.5px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .catov .cat-top{padding:0 0 6px;margin-top:0;top:-8px}
 .catov .sheet{max-width:1180px;max-height:96vh;height:96vh}
@@ -89,7 +90,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .stp{display:inline-flex;align-items:center;gap:0;border:1.5px solid var(--gold,#d4a017);border-radius:6px;overflow:hidden}
 .stp .btn.sm{border:0;border-radius:0;min-width:34px;padding:5px 0;font-weight:800;font-size:16px;line-height:1}
 .stp b{min-width:30px;text-align:center;font-size:14px}
-@media (max-width:699px){.cat-sels #cQ{max-width:none;flex-basis:100%}.cat-sels select.in{flex:1 1 60%}}
+@media (max-width:699px){.cat-sels{gap:4px}.cat-sels .in{padding:6px 6px;font-size:13px}.cat-sels #cQ{flex:1.1 1 0}.cat-sels .chip.so{padding:6px 8px}.cat-sels .chip.so .lg{display:none}.cat-sels .chip.so .sh{display:inline}}
 .cat-top{position:sticky;top:-12px;z-index:2;background:var(--surface);padding:4px 0 8px;margin-top:-4px;border-bottom:1px solid var(--border)}
 @media (max-width:700px){.cat-top{position:static}}
 .cat-sec{margin:14px 0 2px;padding:6px 10px;background:var(--surface-2);border-left:4px solid var(--accent);border-radius:6px;font-weight:800;font-size:13.5px;text-transform:uppercase;letter-spacing:.3px}
@@ -247,6 +248,6 @@ label.btn{cursor:pointer}
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261123j"></script>
+<script src="app.js?v=20261123k"></script>
 </body>
 </html>
