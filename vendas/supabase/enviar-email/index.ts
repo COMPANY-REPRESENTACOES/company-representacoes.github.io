@@ -1,6 +1,8 @@
 // Company Vendas · função "enviar-email": envia o pedido (PDF anexo) pelo Brevo,
 // um e-mail por destinatário, com imagem de confirmação de leitura, e registra em emails_enviados.
-// Segredos necessários no Supabase: BREVO_API_KEY, SENDER_EMAIL, SENDER_NAME
+// Segredos no Supabase: BREVO_API_KEY e um remetente por vendedor:
+//   SENDER_EMAIL_G / SENDER_NAME_G (Guirra), SENDER_EMAIL_C / SENDER_NAME_C (Clara)
+//   (SENDER_EMAIL / SENDER_NAME servem de padrão para quem não tiver o seu)
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CORS = {
@@ -17,9 +19,7 @@ Deno.serve(async (req) => {
   const URL_ = Deno.env.get("SUPABASE_URL")!;
   const SRV = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const KEY = Deno.env.get("BREVO_API_KEY");
-  const FROM = Deno.env.get("SENDER_EMAIL");
-  const FROM_NAME = Deno.env.get("SENDER_NAME") || "Company Representações";
-  if (!KEY || !FROM) return json({ erro: "envio direto ainda não configurado (faltam BREVO_API_KEY / SENDER_EMAIL)" }, 500);
+  if (!KEY) return json({ erro: "envio direto ainda não configurado (falta BREVO_API_KEY)" }, 500);
 
   const db = createClient(URL_, SRV, { auth: { persistSession: false } });
   const tok = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
@@ -28,6 +28,11 @@ Deno.serve(async (req) => {
 
   let b: any;
   try { b = await req.json(); } catch { return json({ erro: "dados inválidos" }, 400); }
+  // remetente de quem está enviando (cada vendedor com o seu e-mail verificado no Brevo)
+  const cod = String(b.vendedor_codigo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const FROM = Deno.env.get("SENDER_EMAIL_" + cod) || Deno.env.get("SENDER_EMAIL");
+  const FROM_NAME = Deno.env.get("SENDER_NAME_" + cod) || Deno.env.get("SENDER_NAME") || "Company Representações";
+  if (!FROM) return json({ erro: "falta cadastrar o e-mail remetente deste vendedor (SENDER_EMAIL_" + cod + ")" }, 500);
   const para: string[] = (b.para || []).map((x: string) => String(x).trim()).filter((x: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
   if (!para.length) return json({ erro: "nenhum destinatário válido" }, 400);
   if (!b.pdf_base64) return json({ erro: "PDF não veio" }, 400);

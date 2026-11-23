@@ -1332,7 +1332,7 @@ function enviarDireto(p, para, ass, msg, gid){
   var r = montarPdf(p, 'fabrica');
   var bytes = r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes);
   var corpo = { para: para, assunto: ass, mensagem: msg, pdf_base64: b64DeBytes(bytes), pdf_nome: r.nome, pedido_id: p.id, pedido_numero: p.numero, grupo: gid,
-    enviado_por: (CFG.vendedores[p.vendedor_codigo] || S.perfil.nome) + ' (Company Representações)', vendedor_codigo: p.vendedor_codigo, responder_para: S.sess && S.sess.user.email };
+    enviado_por: (CFG.vendedores[p.vendedor_codigo] || S.perfil.nome) + ' (Company Representações)', vendedor_codigo: (S.perfil && S.perfil.codigo) || p.vendedor_codigo, responder_para: S.sess && S.sess.user.email };
   var go = function(){ return fetch(CFG.url + '/functions/v1/enviar-email', { method: 'POST', headers: headers(true), body: JSON.stringify(corpo) }); };
   var pre = (S.sess && Date.now() > S.sess.expires_at) ? renovar() : Promise.resolve();
   return pre.then(go).then(function(res){
