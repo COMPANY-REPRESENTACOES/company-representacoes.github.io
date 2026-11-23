@@ -1196,7 +1196,7 @@ function telaRepresentadas(){
       var d = r.dados || {}, an = anexosRep(d), temOf = d.oferta_texto || (an.oferta && an.oferta.length);
       return '<div class="card pad"><div class="row">' + (d.logo && d.logo.url ? '<img class="rep-logo-mini" src="' + esc(d.logo.url) + '" alt="">' : '') + '<div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
         (function(){ var t = REP_ANEXOS.reduce(function(s, c){ return s + (an[c[0]] || []).length; }, 0); return t ? ' <span class="badge">📎 ' + t + ' anexo' + (t > 1 ? 's' : '') + '</span>' : ''; })() +
-        '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
+        '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.telefone, d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
         '<div class="row" style="gap:6px"><a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
     }).join('') + '</div>');
 }
@@ -1214,6 +1214,7 @@ function telaRepresentada(arg){
       (d.oferta_texto || (an.oferta && an.oferta.length) ? txtBloco(d.oferta_texto) + arquivosHtml(an.oferta) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar para colocar texto, foto ou PDF.</span>') + '</div>' +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">Dados da representada</h2>' +
       vlin('Nome / Razão social', esc(d.razao || r.nome)) + vlin('CNPJ', esc(fmtDoc(d.cnpj)) || '—') + vlin('Endereço', txtBloco(d.endereco)) +
+      vlin('Telefone da empresa', d.telefone ? esc(d.telefone) + '<div style="margin-top:4px">' + linkFone(d.telefone) + '</div>' : '—') +
       vlin('E-mail para pedidos', d.email_pedidos ? esc(d.email_pedidos) + linkMail(d.email_pedidos) : '—') +
     '<h2 class="sec">Contatos</h2>' +
       REP_CONTATOS.map(function(c){ var x = (d.contatos || {})[c[0]] || {};
@@ -1254,6 +1255,7 @@ function editarRep(r, nova){
     f('Razão social', inp('rRazao', d.razao, ' maxlength="150"')) +
     f('CNPJ', '<input class="in w-m" id="rCnpj" inputmode="numeric" placeholder="00.000.000/0000-00" value="' + esc(fmtDoc(d.cnpj)) + '">') +
     f('Endereço', '<textarea class="in" rows="2" id="rEnd">' + esc(d.endereco) + '</textarea>') +
+    f('Telefone da empresa', '<input class="in w-m" id="rFone" inputmode="tel" placeholder="(00) 0000-0000" value="' + esc(d.telefone) + '">') +
     f('E-mail para envio de pedidos', inp('rMailPed', d.email_pedidos, ' type="email" inputmode="email"')) +
     '<h2 class="sec">Contatos</h2>' +
     REP_CONTATOS.map(function(c){ var x = d.contatos[c[0]] || {};
@@ -1348,7 +1350,7 @@ function editarRep(r, nova){
     if (!nome){ toast('Informe o nome da representada.'); el('rNome').focus(); return; }
     if (enviando){ toast('Aguarde terminar de enviar os anexos.'); return; }
     if (!navigator.onLine){ toast('Sem internet: salve quando estiver online.'); return; }
-    d.razao = el('rRazao').value.trim(); d.cnpj = soDig(el('rCnpj').value); d.endereco = el('rEnd').value.trim();
+    d.razao = el('rRazao').value.trim(); d.cnpj = soDig(el('rCnpj').value); d.endereco = el('rEnd').value.trim(); d.telefone = el('rFone').value.trim();
     d.email_pedidos = el('rMailPed').value.trim(); d.politica = el('rPol').value.trim(); d.oferta_texto = el('rOfTxt').value.trim(); d.obs = el('rObs').value.trim();
     $app.querySelectorAll('[data-ct]').forEach(function(i){ var c = d.contatos[i.dataset.ct] = d.contatos[i.dataset.ct] || {}; c[i.dataset.k] = i.value.trim(); });
     var id = r.id || slug(nome);
