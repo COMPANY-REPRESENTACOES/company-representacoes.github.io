@@ -1196,9 +1196,20 @@ function emailsLista(t){ return String(t||'').split(/[,;\s]+/).map(function(x){ 
 function telaEmail(p){
   var c = p.cliente || {}, cad = clienteDoPedido(p), g = grupo(p.grupo);
   var ind = lsGet('cv_emails_ind', {});
+  var cliMails = emailsLista(cad && cad.email);
+  function repMails(gid){ var r = acharRep(gid), l = emailsLista(r && r.dados && r.dados.email_pedidos);
+    emailsLista(ind[gid]).forEach(function(x){ if (l.indexOf(x) < 0 && cliMails.indexOf(x) < 0) l.push(x); }); return l; }
+  var para = lsGet('cv_email_para', 'ambos');
   function destPadrao(gid){
-    var l = emailsLista(ind[gid]); if (cad && cad.email && l.indexOf(cad.email) < 0) l.push(cad.email);
+    var l = [], add = function(x){ if (l.map(function(y){ return y.toLowerCase(); }).indexOf(x.toLowerCase()) < 0) l.push(x); };
+    if (para !== 'cliente') repMails(gid).forEach(add);
+    if (para !== 'rep') cliMails.forEach(add);
     return l.join(',');
+  }
+  function infoMails(gid){
+    var r = repMails(gid), gg = grupo(gid);
+    return '<div class="mail-who"><div><b>Representada (' + esc(gg ? gg.nome : gid) + '):</b> ' + (r.length ? esc(r.join(', ')) : '<span class="warn-t">sem e-mail cadastrado — cadastre em Representadas › E-mail para envio de pedidos</span>') + '</div>' +
+      '<div><b>Cliente:</b> ' + (cliMails.length ? esc(cliMails.join(', ')) : '<span class="warn-t">sem e-mail no cadastro do cliente</span>') + '</div></div>';
   }
   function assunto(gid){ var gg = grupo(gid); return 'Pedido Nº ' + p.numero + ' - ' + (gg ? gg.nome : gid); }
   var tot = totalItens(p.itens);
@@ -1209,14 +1220,17 @@ function telaEmail(p){
     '<h3 style="margin:18px 0 4px;font-size:16px">Informações para envio</h3>' +
     '<label class="lb">Cliente</label><input class="in" value="' + esc(c.name) + '" disabled>' +
     '<label class="lb">Indústria</label><select class="in" id="mG">' + S.cat.grupos.map(function(x){ return '<option value="' + x.id + '"' + (x.id === p.grupo ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select>' +
+    '<label class="lb">Enviar para</label><div class="chips wrap" id="mPara2">' + [['rep','Só a representada'],['ambos','Representada e cliente'],['cliente','Só o cliente']].map(function(o){ return '<button type="button" class="chip" data-para="' + o[0] + '" aria-pressed="' + (para === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+    '<div id="mWho">' + infoMails(p.grupo) + '</div>' +
     '<label class="lb">Destinatário(s) *</label><textarea class="in" id="mPara" rows="2" placeholder="pedidos@fabrica.com.br, cliente@email.com">' + esc(destPadrao(p.grupo)) + '</textarea>' +
-    '<div class="muted" style="font-size:12px;margin-top:3px">Adicione vários e-mails separados por vírgula. Os e-mails da indústria ficam guardados para os próximos pedidos.</div>' +
+    '<div class="muted" style="font-size:12px;margin-top:3px">Adicione vários e-mails separados por vírgula. Preenchido conforme a escolha acima; você pode acrescentar outros e-mails separados por vírgula.</div>' +
     '<label class="lb">Assunto do e-mail *</label><input class="in" id="mAss" value="' + esc(assunto(p.grupo)) + '">' +
     '<label class="lb">Mensagem</label><textarea class="in" id="mMsg" rows="5">Olá,\n\nSegue em anexo o pedido Nº ' + esc(p.numero) + ' do cliente ' + esc(c.name || '') + ' (' + esc(fmt(tot)) + ').\n\nAtenciosamente,\n' + esc(CFG.vendedores[p.vendedor_codigo] || '') + ' · Company Representações\n' + esc(CFG.fones[p.vendedor_codigo] || '') + '</textarea>' +
     (ehCelular() ? '' : '<label class="lb">Enviar pelo</label><select class="in" id="mVia"><option value="gmail"' + (lsGet('cv_email_via','gmail') === 'gmail' ? ' selected' : '') + '>Gmail (no navegador)</option><option value="app"' + (lsGet('cv_email_via','gmail') === 'app' ? ' selected' : '') + '>Programa de e-mail do computador (Outlook etc.)</option></select>') +
     '<div class="row" style="margin-top:16px;gap:8px;flex-wrap:wrap"><button class="btn pri" id="mEnv">✉ Enviar</button><button class="btn" id="mEnvNovo">✉ Enviar e novo pedido</button><span class="muted">ou</span><button class="btn sm" id="mCanc">Cancelar</button></div>');
   var el = function(id){ return m.body.querySelector('#' + id); };
-  el('mG').onchange = function(){ var gid = this.value, gg = grupo(gid); el('mPara').value = destPadrao(gid); el('mAss').value = assunto(gid); el('mInd').textContent = gg ? gg.nome : gid; };
+  m.body.querySelectorAll('[data-para]').forEach(function(b){ b.onclick = function(){ para = b.dataset.para; lsSet('cv_email_para', para); m.body.querySelectorAll('[data-para]').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); el('mPara').value = destPadrao(el('mG').value); }; });
+  el('mG').onchange = function(){ var gid = this.value, gg = grupo(gid); el('mPara').value = destPadrao(gid); el('mWho').innerHTML = infoMails(gid); el('mAss').value = assunto(gid); el('mInd').textContent = gg ? gg.nome : gid; };
   el('mCanc').onclick = function(){ m.ov.remove(); document.body.style.overflow = ''; };
   function enviar(novo){
     var para = emailsLista(el('mPara').value), ass = el('mAss').value.trim(), msg = el('mMsg').value, gid = el('mG').value;
@@ -1225,8 +1239,9 @@ function telaEmail(p){
     if (ruim.length){ toast('E-mail inválido: ' + ruim.join(', ')); return; }
     if (!ass){ toast('Informe o assunto do e-mail.'); return; }
     // guarda os e-mails da indústria (sem o do cliente) para os próximos pedidos
-    var semCli = para.filter(function(x){ return !(cad && cad.email && x.toLowerCase() === String(cad.email).toLowerCase()); });
-    ind[gid] = semCli.join(','); lsSet('cv_emails_ind', ind);
+    var rcad = acharRep(gid), rl = emailsLista(rcad && rcad.dados && rcad.dados.email_pedidos).map(function(x){ return x.toLowerCase(); }), cl = cliMails.map(function(x){ return x.toLowerCase(); });
+    var extras = para.filter(function(x){ return rl.indexOf(x.toLowerCase()) < 0 && cl.indexOf(x.toLowerCase()) < 0; });
+    if (extras.length) { ind[gid] = extras.join(','); lsSet('cv_emails_ind', ind); }
     var via = el('mVia') ? el('mVia').value : 'app'; lsSet('cv_email_via', via);
     var r = montarPdf(p, 'fabrica');
     if (podeCompartilhar(r.file)){
