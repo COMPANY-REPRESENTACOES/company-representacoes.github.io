@@ -417,6 +417,7 @@ function listaPedidos(){
 }
 function telaPedidos(){
   var f = S.filtro, todos = listaPedidos();
+  if (f.st && !STATUS.some(function(x){ return x[0] === f.st; })) f.st = '';
   var q = f.q.toLowerCase();
   var lista = todos.filter(function(p){
     if (f.st && p.status !== f.st) return false;
@@ -427,7 +428,7 @@ function telaPedidos(){
   });
   function cnt(fn){ return todos.filter(fn).length; }
   var chipsSt = [['','Todos']].concat(STATUS).map(function(s){
-    return '<button class="chip" data-st="' + s[0] + '" aria-pressed="' + (f.st === s[0]) + '">' + s[1] + ' <span class="ct">' + cnt(function(p){ return !s[0] || p.status === s[0]; }) + '</span></button>';
+    return '<button class="chip" data-st="' + s[0] + '" aria-pressed="' + (f.st === s[0]) + '">' + s[1] + '</button>';
   }).join('');
   var chipsOrg = [['','Todas as origens'],['express','Pedido Express'],['app','Lançados no app']].map(function(s){
     return '<button class="chip" data-org="' + s[0] + '" aria-pressed="' + (f.org === s[0]) + '">' + s[1] + '</button>';
