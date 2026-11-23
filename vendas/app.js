@@ -11,7 +11,7 @@ var STATUS = [
 var STATUS_NOME = {}; STATUS.forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
 /* regras comerciais por representada (pedido mínimo, à vista, prazos com valor mínimo por duplicata) */
 var REGRAS = {
-  vector: { minimo: 1000, minDup: 500, avista: { nome: 'À vista PIX (5% de desconto)', desc: 5 },
+  vector: { minimo: 1000, minDup: 500, avistas: [ { nome: 'À vista PIX (5% de desconto)', desc: 5 }, { nome: 'À vista 15 dd (5% de desconto)', desc: 5 } ],
     prazos: [ { p: '30 dd' }, { p: '30/60' }, { p: '30/45/60' }, { p: '30/60/90' }, { p: '30/45/60/75/90' },
       { p: '30/60/90/120', acima: 5000 }, { p: '30/45/60/75/90/105', acima: 5000 }, { p: '30/45/60/75/90/105/120', acima: 5000 } ] }
 };
@@ -23,12 +23,23 @@ function prazoMotivo(r, op, tot){
   var n = nParcelas(op.p); if (r.minDup && tot / n < r.minDup) return 'duplicata abaixo de ' + fmt(r.minDup);
   return '';
 }
-function eAvista(p){ var r = regraDe(p.grupo); return !!(r && r.avista && p.prazo === r.avista.nome); }
-function descAvista(p, tot){ var r = regraDe(p.grupo); return eAvista(p) ? r2(tot * r.avista.desc / 100) : 0; }
+function avistaDe(p){ var r = regraDe(p.grupo); return (r && r.avistas || []).find(function(a){ return a.nome === p.prazo; }) || null; }
+function eAvista(p){ return !!avistaDe(p); }
+/* total sem o desconto à vista (base para pedido mínimo e duplicata) */
+function totBruto(p){ return r2(p.itens.reduce(function(s, i){ return s + r2(i.qty * (i.base != null ? i.base : i.unit)); }, 0)); }
+/* aplica ou tira o desconto à vista no preço de cada item (guarda o preço sem desconto em it.base) */
+function aplicarAvista(p){
+  var a = avistaDe(p), d = a ? a.desc : 0;
+  p.itens.forEach(function(it){
+    if (d){ if (it.base == null) it.base = it.unit; it.unit = r2(it.base * (1 - d/100)); }
+    else if (it.base != null){ it.unit = it.base; delete it.base; }
+  });
+  if (d) p.desc_avista = d; else delete p.desc_avista;
+}
 /* avisos das regras: [] quando está tudo certo */
 function avisosRegra(p){
   var r = regraDe(p.grupo); if (!r) return [];
-  var tot = totalItens(p.itens), av = [];
+  var tot = totBruto(p), av = [];
   if (r.minimo && tot < r.minimo) av.push('Pedido mínimo ' + fmt(r.minimo) + ' (faltam ' + fmt(r2(r.minimo - tot)) + ').');
   if (!p.prazo) av.push('Escolha o prazo de pagamento.');
   else if (!eAvista(p)){ var op = r.prazos.find(function(x){ return x.p === p.prazo; }); var mo = op ? prazoMotivo(r, op, tot) : 'prazo fora da política'; if (mo) av.push('Prazo ' + p.prazo + ' não vale para ' + fmt(tot) + ': ' + mo + '.'); }
@@ -38,19 +49,19 @@ function confereRegra(p, acao){ var av = avisosRegra(p); return !av.length || co
 function prazoCampo(p, travado){
   var r = regraDe(p.grupo);
   if (!r) return '<input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"><datalist id="prazosL">' + PRAZOS.map(function(x){ return '<option value="' + x + '">'; }).join('') + '</datalist>';
-  var tot = totalItens(p.itens), conhecidos = [r.avista && r.avista.nome].concat(r.prazos.map(function(x){ return x.p; }));
+  var tot = totBruto(p), conhecidos = (r.avistas || []).map(function(a){ return a.nome; }).concat(r.prazos.map(function(x){ return x.p; }));
   var o = '<option value="">Selecione</option>';
   if (p.prazo && conhecidos.indexOf(p.prazo) < 0) o += '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>';
-  if (r.avista) o += '<option value="' + esc(r.avista.nome) + '"' + (p.prazo === r.avista.nome ? ' selected' : '') + '>' + esc(r.avista.nome) + '</option>';
+  (r.avistas || []).forEach(function(a){ o += '<option value="' + esc(a.nome) + '"' + (p.prazo === a.nome ? ' selected' : '') + '>' + esc(a.nome) + '</option>'; });
   r.prazos.forEach(function(x){ var mo = prazoMotivo(r, x, tot); o += '<option value="' + esc(x.p) + '"' + (p.prazo === x.p ? ' selected' : '') + (mo && p.prazo !== x.p ? ' disabled' : '') + '>' + esc(x.p) + (mo ? ' — ' + mo : '') + '</option>'; });
   return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + o + '</select>';
 }
 function regraBox(p){
   var r = regraDe(p.grupo); if (!r) return '';
-  var tot = totalItens(p.itens), d = descAvista(p, tot), av = avisosRegra(p);
-  return '<div class="regra">' + (d ? '<div class="rl"><span>Desconto à vista PIX ' + r.avista.desc + '%</span><span>− ' + fmt(d) + '</span></div><div class="rl tt"><span>Total à vista</span><span>' + fmt(r2(tot - d)) + '</span></div>' : '') +
+  var a = avistaDe(p), eco = a ? r2(totBruto(p) - totalItens(p.itens)) : 0, av = avisosRegra(p);
+  return '<div class="regra">' + (a ? '<div class="rl"><span>✓ Desconto à vista ' + a.desc + '% já aplicado nos itens (sem ele: ' + fmt(totBruto(p)) + ')</span><span>− ' + fmt(eco) + '</span></div>' : '') +
     (av.length ? av.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') : '') +
-    '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': pedido mínimo ' + fmt(r.minimo) + (r.avista ? ' · à vista PIX ' + r.avista.desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>';
+    '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': pedido mínimo ' + fmt(r.minimo) + (r.avistas ? ' · à vista (PIX ou 15 dd) ' + r.avistas[0].desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>';
 }
 function atualizaRegra(){
   if (!ED) return; var el = document.getElementById('eRegra'); if (el) el.innerHTML = regraBox(ED.p);
@@ -152,6 +163,11 @@ function acharItem(gid, cod){
 var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]], avs: [[10,5]] };
 function numBR(x){ return String(Math.round(x*10)/10).replace('.', ','); }
 function precoInfo(p, it){
+  if (it.base != null && p.desc_avista){
+    var pb = precoInfo(p, { cod: it.cod, unit: it.base, label: it.label }), extra = p.desc_avista + '% à vista';
+    if (!pb.tab) return { tab: r2(it.base), desc: extra };
+    return { tab: pb.tab, desc: pb.desc === 'sem desconto' ? extra : pb.desc + ' + ' + extra };
+  }
   var a = acharItem(p.grupo, it.cod), pid = politicaId(p.grupo, p.politica), unit = r2(it.unit), tab = null, d = 0;
   if (a && pid){
     var o = a.it.o && a.it.o[pid], cp = a.it.p[pid];
@@ -466,7 +482,7 @@ function telaEditor(){
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
-  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ ED.p.prazo = this.value; marcar(); atualizaRegra(); };
+  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
   document.getElementById('eObs').oninput = function(){ ED.p.obs = this.value; marcar(); };
   document.getElementById('eSt').onchange = function(){ ED.p.status = this.value; marcar(); telaEditor(); };
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
@@ -507,7 +523,7 @@ function ligarItens(travado){
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
     row.querySelector('[data-q]').onchange = function(){ var v = parseInt(this.value,10); it.qty = v > 0 ? v : 1; this.value = it.qty; upd(); };
-    row.querySelector('[data-u]').onchange = function(){ var v = parseFloat(String(this.value).replace(/\./g,'').replace(',','.')); if (!(v >= 0)) v = it.unit; it.unit = r2(v); this.value = it.unit.toFixed(2).replace('.',','); upd(); };
+    row.querySelector('[data-u]').onchange = function(){ var v = parseFloat(String(this.value).replace(/\./g,'').replace(',','.')); if (!(v >= 0)) v = it.unit; it.unit = r2(v); if (it.base != null && ED.p.desc_avista) it.base = r2(v / (1 - ED.p.desc_avista/100)); this.value = it.unit.toFixed(2).replace('.',','); upd(); };
     row.querySelector('[data-rm]').onclick = function(){ if (confirm('Remover ' + it.cod + ' do pedido?')){ ED.p.itens.splice(i,1); ED.sujo = true; telaEditor(); } };
   });
 }
@@ -518,8 +534,10 @@ function trocarPolitica(pid){
     var a = acharItem(p.grupo, it.cod); if (!a) return;
     var novo = a.it.p[pid];
     if (a.it.tiers && a.it.tiers[pid] && it.label){ var t = a.it.tiers[pid].find(function(x){ return x.label === it.label; }); if (t) novo = t.unit; }
-    if (novo != null && r2(novo) !== r2(it.unit)){ it.unit = r2(novo); n++; }
+    var cur = it.base != null ? it.base : it.unit;
+    if (novo != null && r2(novo) !== r2(cur)){ if (it.base != null) it.base = r2(novo); else it.unit = r2(novo); n++; }
   });
+  aplicarAvista(p);
   p.politica = g.politicas.find(function(x){ return x.id === pid; }).nome; ED.sujo = true;
   telaEditor(); if (n) toast(n + ' preço(s) atualizado(s) para a política ' + p.politica);
 }
@@ -638,7 +656,7 @@ function abrirCatalogo(){
       var ix = ED.p.itens.findIndex(function(x){ return x.cod === it.cod && (x.label||'') === label; }), ex = ED.p.itens[ix];
       if (b.dataset.dec){ if (!ex) return; ex.qty -= qty; if (ex.qty <= 0) ED.p.itens.splice(ix, 1); }
       else if (ex) ex.qty += qty;
-      else ED.p.itens.push({ cod: it.cod, desc: it.desc, qty: qty, unit: r2(unit), label: label, marca: mm.nome });
+      else { ED.p.itens.push({ cod: it.cod, desc: it.desc, qty: qty, unit: r2(unit), label: label, marca: mm.nome }); aplicarAvista(ED.p); }
       ED.sujo = true;
       if (b.dataset.add) toast(it.cod + (label ? ' (' + label + ')' : '') + ' adicionado', 1200);
       m.body.querySelectorAll('.opts').forEach(function(o){ if (o.dataset.k === it.k && o.dataset.om === mm.id){ o.innerHTML = optsDe({ i: it, m: mm }); liga(o); } });
@@ -1086,8 +1104,7 @@ function montarPdf(p, modo){
   doc.text(W - M - 10, y + 31, fmt(tot), { size: 14, bold: true, color: RED, align: 'right' });
   doc.text(M, y + 14, 'Prazo de pagamento: ' + (p.prazo || '—'), { size: 8.5, bold: true, color: RED });
   doc.text(M, y + 26, 'Política ' + politicaNome(p.grupo, p.politica) + ' · Total em preço de tabela ' + fmt(somaTab) + ' · Descontos ' + fmt(Math.max(0, somaTab - tot)), { size: 8, color: MUTED });
-  var dAv = descAvista(p, tot);
-  if (dAv){ doc.text(M, y + 40, 'À VISTA PIX: desconto ' + regraDe(p.grupo).avista.desc + '% (− ' + fmt(dAv) + ') · TOTAL À VISTA ' + fmt(r2(tot - dAv)), { size: 9, bold: true, color: RED }); y += 8; }
+  if (eAvista(p)){ doc.text(M, y + 40, 'Preços já com ' + avistaDe(p).desc + '% de desconto à vista (sem o desconto: ' + fmt(totBruto(p)) + ')', { size: 9, bold: true, color: RED }); y += 8; }
   y += 56;
   if (obs.length){ doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED }); y += 6; var oh = obs.length*12 + 12; doc.rect(M, y, CW, oh, null, LINE, 0.8); obs.forEach(function(l,i){ doc.text(M+10, y+15+i*12, l, { size: 9 }); }); y += oh + 16; }
   y = Math.max(y + 30, Math.min(BOTTOM - 20, y + 40)); var sw = (CW - 40)/2;
