@@ -233,6 +233,7 @@ function sincronizar(manual){
       api('clientes?select=*&order=nome.asc&limit=5000'),
       S.perfil ? null : carregarPerfil(),
       api('emails_enviados?select=*&order=enviado_em.desc&limit=2000').then(function(r){ S.emailsErr = ''; S.emails = r || []; kvSet('emails', S.emails); }, function(e){ if (e && e.auth) throw e; S.emailsErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'tabela' : String(e.message).slice(0,160); }),
+      api('transportadoras?select=*&order=nome.asc&limit=5000').then(function(r){ S.trErr = ''; S.transps = r || []; kvSet('transportadoras', S.transps); }, function(e){ if (e && e.auth) throw e; S.trErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'tabela' : String(e.message).slice(0,160); }),
       api('representadas?select=*&order=nome.asc').then(function(r){ S.repErr = ''; return r; }, function(e){ if (e && e.auth) throw e; S.repErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'O banco ainda não tem a tabela de representadas (falta rodar a atualização do banco).' : ''; return null; })
     ]);
   }).then(function(res){
@@ -243,7 +244,7 @@ function sincronizar(manual){
     var cl = res[1] || [];
     S.cfila.forEach(function(cid){ var loc = S.clientes.find(function(x){ return x.id === cid; }); if (loc){ cl = cl.filter(function(x){ return x.id !== cid; }); cl.push(loc); } });
     S.clientes = cl;
-    if (res[4]){ S.reps = res[4]; kvSet('representadas', S.reps); }
+    if (res[5]){ S.reps = res[5]; kvSet('representadas', S.reps); }
     S.lastSync = new Date().toISOString(); lsSet('cv_lastsync', S.lastSync);
     return salvarLocal();
   }).catch(function(e){
@@ -255,7 +256,7 @@ function sincronizar(manual){
 function emFormulario(){
   if (!S.sess || !S.perfil || S.recup) return false;
   var r = rota();
-  return r.nome === 'cliente' || (r.nome === 'representada' && /\/editar$/.test(r.arg));
+  return r.nome === 'cliente' || (r.nome === 'representada' && /\/editar$/.test(r.arg)) || (r.nome === 'transportadoras' && !!r.arg);
 }
 function enviarOp(op){
   var p = S.pedidos[op.id]; if (!p) return Promise.resolve();
@@ -309,7 +310,7 @@ function topo(){
 function casca(conteudo, acoes){
   var r = rota().nome;
   var nAl = emailsAlerta().length;
-  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['desempenho','Desempenho'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
+  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['transportadoras','Transportadoras'],['desempenho','Desempenho'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
@@ -488,7 +489,7 @@ function telaEditor(){
       '<div><label class="lb">CNPJ / CPF</label><input class="in" data-c="doc" inputmode="numeric" value="' + esc(c.doc) + '"></div>' +
       '<div><label class="lb">Telefone / WhatsApp</label><input class="in" data-c="phone" type="tel" value="' + esc(c.phone) + '"></div>' +
       '<div><label class="lb">Cidade / UF</label><input class="in" data-c="city" value="' + esc(c.city) + '"></div>' +
-      '<div><label class="lb">Transportadora</label><input class="in" data-c="carrier" value="' + esc(c.carrier) + '"></div>' +
+      '<div><label class="lb">Transportadora</label><input class="in" data-c="carrier" list="trL" autocomplete="off" placeholder="Digite para buscar" value="' + esc(c.carrier) + '">' + trDatalist() + '</div>' +
       '<div><label class="lb">Prazo de pagamento</label>' + prazoCampo(p, travado) + '</div>' +
     '</div><label class="lb">Observação</label><textarea class="in" id="eObs" rows="2">' + esc(p.obs) + '</textarea></div>' +
     '<div class="row" style="margin-top:16px"><h2 class="grow" style="margin:0">Itens (' + p.itens.length + ')</h2>' + (travado || ED.novo ? '' : (ED.editItens ? '<button class="btn sm" id="eEdIt">🔒 Travar itens</button>' : '<button class="btn sm edit-it" id="eEdIt">✎ Editar itens</button>')) + (itTrav ? '' : '<button class="btn sm pri" id="eAdd">+ Adicionar produto</button>') + '</div>' +
@@ -1285,6 +1286,67 @@ function telaEmail(p){
   el('mEnvNovo').onclick = function(){ enviar(true); };
 }
 
+/* ---------- transportadoras ---------- */
+var UF_NOMES = { AC:'Acre', AL:'Alagoas', AP:'Amapá', AM:'Amazonas', BA:'Bahia', CE:'Ceará', DF:'Distrito Federal', ES:'Espírito Santo', GO:'Goiás', MA:'Maranhão', MT:'Mato Grosso', MS:'Mato Grosso do Sul', MG:'Minas Gerais', PA:'Pará', PB:'Paraíba', PR:'Paraná', PE:'Pernambuco', PI:'Piauí', RJ:'Rio de Janeiro', RN:'Rio Grande do Norte', RS:'Rio Grande do Sul', RO:'Rondônia', RR:'Roraima', SC:'Santa Catarina', SP:'São Paulo', SE:'Sergipe', TO:'Tocantins' };
+function trDatalist(){ return '<datalist id="trL">' + (S.transps || []).map(function(t){ return '<option value="' + esc(t.nome) + '">' + esc([t.telefone, [t.cidade, t.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ')) + '</option>'; }).join('') + '</datalist>'; }
+function foneLink(f){ var n = soNum(f); if (!n) return ''; return '<a class="tr-tel" href="tel:+55' + n + '">📞 ' + esc(f) + '</a>'; }
+function telaTransportadoras(arg){
+  if (arg === 'nova') return editarTransp(null);
+  if (arg){ var t0 = (S.transps || []).find(function(x){ return x.id === arg; }); if (t0) return editarTransp(t0); }
+  var q = (S.fTrQ || '').toLowerCase(), uf = S.fTrUf || '';
+  var todos = (S.transps || []).slice().sort(function(a, b){ return String(a.nome).localeCompare(String(b.nome), 'pt'); });
+  var lista = todos.filter(function(t){ return (!uf || t.uf === uf) && (!q || [t.nome, t.telefone, t.telefone2, t.cidade, t.uf].join(' ').toLowerCase().indexOf(q) > -1); });
+  var ufsUsadas = Object.keys(todos.reduce(function(o, t){ if (t.uf) o[t.uf] = 1; return o; }, {})).sort();
+  var aviso = S.trErr === 'tabela' ? '<div class="note warn">O cadastro de transportadoras ainda não está ligado no banco.</div>' : S.trErr ? '<div class="note bad">Não foi possível carregar: ' + esc(S.trErr) + '</div>' : '';
+  var html = '<div class="row"><h1 class="grow" style="margin:0">Transportadoras</h1><a class="btn pri" href="#transportadoras/nova">+ Nova transportadora</a></div>' + aviso +
+    '<div class="tr-busca"><input class="in" id="trQ" type="search" placeholder="🔍 Buscar por nome, telefone ou cidade" value="' + esc(S.fTrQ || '') + '">' +
+    '<select class="in" id="trUf"><option value="">Todos os estados</option>' + ufsUsadas.map(function(u){ return '<option value="' + u + '"' + (uf === u ? ' selected' : '') + '>' + u + ' – ' + esc(UF_NOMES[u] || u) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="muted" style="font-size:12.5px;margin:8px 2px">' + lista.length + ' de ' + todos.length + ' transportadora' + (todos.length === 1 ? '' : 's') + '</div>' +
+    '<div class="tr-grid">' + (lista.length ? lista.map(function(t){
+      var loc = [t.cidade, t.uf].filter(Boolean).join(' / ');
+      return '<div class="card tr-card"><div class="tr-av">' + esc(String(t.nome || '?').trim().slice(0,1).toUpperCase()) + '</div><div class="tr-i"><b>' + esc(t.nome) + '</b>' +
+        (loc ? '<span class="muted">📍 ' + esc(loc) + '</span>' : '') + '<div class="tr-tels">' + foneLink(t.telefone) + foneLink(t.telefone2) + (!t.telefone && !t.telefone2 ? '<span class="muted" style="font-size:12.5px">sem telefone</span>' : '') + '</div></div>' +
+        '<a class="btn sm" href="#transportadoras/' + esc(t.id) + '">Editar</a></div>';
+    }).join('') : '<div class="card empty">' + (todos.length ? 'Nenhuma transportadora com essa busca.' : 'Nenhuma transportadora cadastrada.') + '</div>') + '</div>';
+  casca(html);
+  document.getElementById('trQ').oninput = function(){ S.fTrQ = this.value; var pos = this.selectionStart; telaTransportadoras(); var e = document.getElementById('trQ'); e.focus(); e.setSelectionRange(pos, pos); };
+  document.getElementById('trUf').onchange = function(){ S.fTrUf = this.value; telaTransportadoras(); };
+}
+function editarTransp(t){
+  var novo = !t; t = t || { nome: '', telefone: '', telefone2: '', cidade: '', uf: '' };
+  var cidades = Object.keys((S.transps || []).concat(S.clientes || []).reduce(function(o, x){ if (x.cidade) o[String(x.cidade).trim()] = 1; return o; }, {})).sort();
+  var html = '<a class="btn sm" href="#transportadoras">← Transportadoras</a><h1 style="margin:12px 0 10px">' + (novo ? 'Nova transportadora' : esc(t.nome)) + '</h1>' +
+    '<div class="card" style="padding:16px"><div class="grid2">' +
+      '<div style="grid-column:1/-1"><label class="lb">Nome *</label><input class="in" id="tNome" value="' + esc(t.nome) + '"></div>' +
+      '<div><label class="lb">Telefone</label><input class="in" id="tTel" type="tel" inputmode="tel" value="' + esc(t.telefone) + '"></div>' +
+      '<div><label class="lb">Telefone 2</label><input class="in" id="tTel2" type="tel" inputmode="tel" value="' + esc(t.telefone2 || '') + '"></div>' +
+      '<div><label class="lb">Cidade</label><input class="in" id="tCid" list="tCidL" autocomplete="off" value="' + esc(t.cidade) + '"><datalist id="tCidL">' + cidades.map(function(c){ return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>' +
+      '<div><label class="lb">Estado</label><select class="in" id="tUf"><option value="">Selecione</option>' + UFS.slice().sort().map(function(u){ return '<option value="' + u + '"' + (t.uf === u ? ' selected' : '') + '>' + u + ' – ' + esc(UF_NOMES[u] || u) + '</option>'; }).join('') + '</select></div>' +
+    '</div></div>' +
+    '<div class="row" style="margin-top:14px;gap:8px">' + (novo ? '' : '<button class="btn bad" id="tDel">Excluir</button>') + '<span class="grow"></span><a class="btn" href="#transportadoras">Cancelar</a><button class="btn pri" id="tSalvar">Salvar</button></div>';
+  casca(html);
+  var el = function(id){ return document.getElementById(id); };
+  el('tSalvar').onclick = function(){
+    var row = { nome: el('tNome').value.trim(), telefone: el('tTel').value.trim(), telefone2: el('tTel2').value.trim(), cidade: el('tCid').value.trim(), uf: el('tUf').value };
+    if (!row.nome){ el('tNome').classList.add('err'); toast('Informe o nome da transportadora.'); return; }
+    if (!navigator.onLine){ toast('Sem internet: o cadastro de transportadora precisa de conexão.'); return; }
+    var b = this; b.disabled = true; b.textContent = 'Salvando…';
+    var req = novo ? api('transportadoras', { method: 'POST', body: row, prefer: 'return=representation' }) : api('transportadoras?id=eq.' + t.id, { method: 'PATCH', body: row, prefer: 'return=representation' });
+    req.then(function(r){
+      var salvo = (r && r[0]) || Object.assign({}, t, row);
+      S.transps = (S.transps || []).filter(function(x){ return x.id !== salvo.id; }).concat([salvo]); kvSet('transportadoras', S.transps);
+      toast('Transportadora salva.'); location.hash = '#transportadoras';
+    }, function(e){ b.disabled = false; b.textContent = 'Salvar'; toast('Não foi possível salvar: ' + String(e.message).slice(0,140)); });
+  };
+  if (el('tDel')) el('tDel').onclick = function(){
+    if (!confirm('Excluir a transportadora ' + t.nome + '?')) return;
+    api('transportadoras?id=eq.' + t.id, { method: 'DELETE', prefer: 'return=minimal' }).then(function(){
+      S.transps = (S.transps || []).filter(function(x){ return x.id !== t.id; }); kvSet('transportadoras', S.transps); toast('Transportadora excluída.'); location.hash = '#transportadoras';
+    }, function(e){ toast('Não foi possível excluir: ' + String(e.message).slice(0,140)); });
+  };
+  el('tNome').focus();
+}
+
 /* ---------- desempenho (resumos em gráficos) ---------- */
 var MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 var MESES_N = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1738,6 +1800,7 @@ function render(){
   if (r.nome === 'representada') return telaRepresentada(r.arg);
   if (r.nome === 'emails') return telaEmails();
   if (r.nome === 'desempenho') return telaDesempenho();
+  if (r.nome === 'transportadoras') return telaTransportadoras(r.arg);
   if (r.nome === 'mais') return telaMais();
   return telaPedidos();
 }
@@ -1758,8 +1821,8 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden &
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function(){});
 
-Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas'), kvGet('emails')]).then(function(r){
-  S.reps = r[5] || []; S.emails = r[6] || [];
+Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas'), kvGet('emails'), kvGet('transportadoras')]).then(function(r){
+  S.reps = r[5] || []; S.emails = r[6] || []; S.transps = r[7] || [];
   S.pedidos = r[0] || {}; S.clientes = r[1] || []; S.fila = r[2] || []; S.cfila = r[4] || [];
   render(); sincronizar();
 });
