@@ -232,6 +232,7 @@ function sincronizar(manual){
       api('pedidos?select=*&order=criado_em.desc&limit=1000'),
       api('clientes?select=*&order=nome.asc&limit=5000'),
       S.perfil ? null : carregarPerfil(),
+      api('emails_enviados?select=*&order=enviado_em.desc&limit=2000').then(function(r){ S.emailsErr = ''; S.emails = r || []; kvSet('emails', S.emails); }, function(e){ if (e && e.auth) throw e; S.emailsErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'tabela' : String(e.message).slice(0,160); }),
       api('representadas?select=*&order=nome.asc').then(function(r){ S.repErr = ''; return r; }, function(e){ if (e && e.auth) throw e; S.repErr = /42P01|PGRST205|does not exist/.test(String(e.message)) ? 'O banco ainda não tem a tabela de representadas (falta rodar a atualização do banco).' : ''; return null; })
     ]);
   }).then(function(res){
@@ -242,7 +243,7 @@ function sincronizar(manual){
     var cl = res[1] || [];
     S.cfila.forEach(function(cid){ var loc = S.clientes.find(function(x){ return x.id === cid; }); if (loc){ cl = cl.filter(function(x){ return x.id !== cid; }); cl.push(loc); } });
     S.clientes = cl;
-    if (res[3]){ S.reps = res[3]; kvSet('representadas', S.reps); }
+    if (res[4]){ S.reps = res[4]; kvSet('representadas', S.reps); }
     S.lastSync = new Date().toISOString(); lsSet('cv_lastsync', S.lastSync);
     return salvarLocal();
   }).catch(function(e){
@@ -307,7 +308,8 @@ function topo(){
 }
 function casca(conteudo, acoes){
   var r = rota().nome;
-  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['mais','Mais']];
+  var nAl = emailsAlerta().length;
+  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
@@ -1226,7 +1228,8 @@ function telaEmail(p){
     '<div class="muted" style="font-size:12px;margin-top:3px">Adicione vários e-mails separados por vírgula. Preenchido conforme a escolha acima; você pode acrescentar outros e-mails separados por vírgula.</div>' +
     '<label class="lb">Assunto do e-mail *</label><input class="in" id="mAss" value="' + esc(assunto(p.grupo)) + '">' +
     '<label class="lb">Mensagem</label><textarea class="in" id="mMsg" rows="5">Olá,\n\nSegue em anexo o pedido Nº ' + esc(p.numero) + ' do cliente ' + esc(c.name || '') + ' (' + esc(fmt(tot)) + ').\n\nAtenciosamente,\n' + esc(CFG.vendedores[p.vendedor_codigo] || '') + ' · Company Representações\n' + esc(CFG.fones[p.vendedor_codigo] || '') + '</textarea>' +
-    (ehCelular() ? '' : '<label class="lb">Enviar pelo</label><select class="in" id="mVia"><option value="gmail"' + (lsGet('cv_email_via','gmail') === 'gmail' ? ' selected' : '') + '>Gmail (no navegador)</option><option value="app"' + (lsGet('cv_email_via','gmail') === 'app' ? ' selected' : '') + '>Programa de e-mail do computador (Outlook etc.)</option></select>') +
+    '<label class="lb">Enviar pelo</label><select class="in" id="mVia"><option value="direto"' + (lsGet('cv_email_via', CFG.emailDireto ? 'direto' : 'gmail') === 'direto' ? ' selected' : '') + '>Programa — envio direto com PDF anexado e confirmação de leitura</option>' + (ehCelular() ? '<option value="app">App de e-mail do celular</option></select>' : '') +
+    (ehCelular() ? '' : '<option value="gmail"' + (lsGet('cv_email_via','gmail') === 'gmail' ? ' selected' : '') + '>Gmail (no navegador)</option><option value="app"' + (lsGet('cv_email_via','gmail') === 'app' ? ' selected' : '') + '>Programa de e-mail do computador (Outlook etc.)</option></select>') +
     '<div class="row" style="margin-top:16px;gap:8px;flex-wrap:wrap"><button class="btn pri" id="mEnv">✉ Enviar</button><button class="btn" id="mEnvNovo">✉ Enviar e novo pedido</button><span class="muted">ou</span><button class="btn sm" id="mCanc">Cancelar</button></div>');
   var el = function(id){ return m.body.querySelector('#' + id); };
   m.body.querySelectorAll('[data-para]').forEach(function(b){ b.onclick = function(){ para = b.dataset.para; lsSet('cv_email_para', para); m.body.querySelectorAll('[data-para]').forEach(function(x){ x.setAttribute('aria-pressed', x === b); }); el('mPara').value = destPadrao(el('mG').value); }; });
@@ -1243,6 +1246,22 @@ function telaEmail(p){
     var extras = para.filter(function(x){ return rl.indexOf(x.toLowerCase()) < 0 && cl.indexOf(x.toLowerCase()) < 0; });
     if (extras.length) { ind[gid] = extras.join(','); lsSet('cv_emails_ind', ind); }
     var via = el('mVia') ? el('mVia').value : 'app'; lsSet('cv_email_via', via);
+    if (via === 'direto'){
+      var bt = el('mEnv'), bt2 = el('mEnvNovo'); bt.disabled = bt2.disabled = true; bt.textContent = 'Enviando…';
+      enviarDireto(p, para, ass, msg, gid).then(function(j){
+        var rs = j.resultados || [], ok = rs.filter(function(x){ return x.ok; }), ruins = rs.filter(function(x){ return !x.ok; });
+        m.ov.remove(); document.body.style.overflow = '';
+        if (ruins.length) alert('Enviado para ' + ok.length + ' de ' + rs.length + '.\nNão foi para: ' + ruins.map(function(x){ return x.destinatario + ' (' + String(x.erro||'').slice(0,80) + ')'; }).join('\n'));
+        else toast('✓ E-mail enviado para ' + ok.length + ' destinatário' + (ok.length > 1 ? 's' : '') + '. Acompanhe a leitura na aba E-mails.', 5000);
+        sincronizar();
+        if (ok.length && !jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado à fábrica” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
+        if (novo) setTimeout(function(){ location.hash = '#novo'; }, 300);
+      }, function(err){
+        bt.disabled = bt2.disabled = false; bt.textContent = '✉ Enviar';
+        alert('Não foi possível enviar direto: ' + err.message + '\n\nVocê pode escolher “Gmail” em “Enviar pelo” e enviar do jeito anterior.');
+      });
+      return;
+    }
     var r = montarPdf(p, 'fabrica');
     if (podeCompartilhar(r.file)){
       // celular: abre a lista de apps (escolha Gmail/Outlook) com o PDF anexado; os destinatários vão copiados
@@ -1264,6 +1283,64 @@ function telaEmail(p){
   }
   el('mEnv').onclick = function(){ enviar(false); };
   el('mEnvNovo').onclick = function(){ enviar(true); };
+}
+
+/* ---------- e-mails enviados (confirmação de leitura e alerta de 2 dias) ---------- */
+var DIAS_ALERTA = 2;
+function emailsDoUsuario(){ var l = S.emails || []; return souAdmin() ? l : l.filter(function(e){ return !e.vendedor_codigo || e.vendedor_codigo === (S.perfil && S.perfil.codigo); }); }
+function emAlerta(e){ return e.status_envio !== 'erro' && !e.lido && !e.conferido && (Date.now() - new Date(e.enviado_em).getTime()) > DIAS_ALERTA * 864e5; }
+function emailsAlerta(){ return emailsDoUsuario().filter(emAlerta); }
+function telaEmails(){
+  S.fEm = S.fEm || 'todos';
+  var todos = emailsDoUsuario(), q = (S.fEmQ || '').toLowerCase();
+  var lista = todos.filter(function(e){
+    if (S.fEm === 'alerta' && !emAlerta(e)) return false;
+    if (S.fEm === 'nao' && (e.lido || e.status_envio === 'erro')) return false;
+    if (S.fEm === 'lido' && !e.lido) return false;
+    if (S.fEm === 'erro' && e.status_envio !== 'erro') return false;
+    return !q || [e.destinatario, e.assunto, e.pedido_numero, e.enviado_por].join(' ').toLowerCase().indexOf(q) > -1;
+  });
+  var nAl = todos.filter(emAlerta).length;
+  var aviso = S.emailsErr === 'tabela' ? '<div class="note warn">O registro de e-mails ainda não está ligado no banco. Assim que terminarmos a configuração do envio direto, os e-mails aparecem aqui.</div>'
+    : S.emailsErr ? '<div class="note bad">Não foi possível carregar os e-mails: ' + esc(S.emailsErr) + '</div>' : '';
+  var html = '<div class="row"><h1 class="grow" style="margin:0">E-mails enviados</h1><button class="btn sm" id="emAtu">↻ Atualizar</button></div>' + aviso +
+    (nAl ? '<div class="note bad" style="margin-top:10px">⚠ <b>' + nAl + ' e-mail' + (nAl > 1 ? 's' : '') + ' sem leitura há mais de ' + DIAS_ALERTA + ' dias.</b> Confira com o destinatário e, depois de resolver, toque em “Conferido”.</div>' : '') +
+    '<input class="in" id="emQ" style="margin-top:10px" placeholder="Buscar por destinatário, assunto ou nº do pedido" value="' + esc(S.fEmQ || '') + '">' +
+    '<div class="chips" style="margin-top:8px">' + [['todos','Todos'],['alerta','⚠ Alertas'],['nao','Não lidos'],['lido','Lidos'],['erro','Com erro']].map(function(o){ return '<button class="chip" data-fem="' + o[0] + '" aria-pressed="' + (S.fEm === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="card" style="margin-top:10px;overflow:auto">' + (lista.length ? '<table class="tb em-tb"><thead><tr><th>Data/hora envio</th><th>Destinatário</th><th>Assunto</th><th>Lido/Recebido</th><th>Data/hora leitura</th><th>Enviado por</th><th></th></tr></thead><tbody>' +
+      lista.map(function(e){
+        var al = emAlerta(e), st = e.status_envio === 'erro' ? '<span class="badge st-cancelado" title="' + esc(e.erro || '') + '">Erro no envio</span>' : e.lido ? '<span class="badge em-sim">Sim</span>' + (e.aberturas > 1 ? ' <span class="muted" style="font-size:12px">' + e.aberturas + '×</span>' : '') : al ? '<span class="badge em-al">⚠ Não · ' + Math.floor((Date.now() - new Date(e.enviado_em).getTime())/864e5) + ' dias</span>' : '<span class="badge em-nao">Não</span>';
+        return '<tr class="' + (al ? 'em-alerta' : '') + '"><td>' + dataBR(e.enviado_em) + '</td><td>' + esc(e.destinatario) + '</td><td>' + (e.pedido_id && S.pedidos[e.pedido_id] ? '<a href="#pedido/' + esc(e.pedido_id) + '">' + esc(e.assunto) + '</a>' : esc(e.assunto)) + '</td><td>' + st + '</td><td>' + (e.lido_em ? dataBR(e.lido_em) : '') + '</td><td>' + esc(e.enviado_por || '') + '</td>' +
+          '<td>' + (al ? '<button class="btn sm" data-conf="' + esc(e.id) + '">✓ Conferido</button>' : e.conferido && !e.lido ? '<span class="muted" style="font-size:12px">conferido</span>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table>' : '<div class="empty">' + (todos.length ? 'Nenhum e-mail com esse filtro.' : 'Nenhum e-mail enviado pelo programa ainda.') + '</div>') + '</div>' +
+    '<p class="muted" style="font-size:12px;margin-top:10px">“Lido” é marcado quando o destinatário abre o e-mail com as imagens carregadas. Alguns programas de e-mail bloqueiam imagens (aí fica “Não” mesmo lido) e o Mail do iPhone pode marcar como lido sozinho.</p>';
+  casca(html);
+  document.getElementById('emAtu').onclick = function(){ sincronizar(true); };
+  document.getElementById('emQ').oninput = function(){ S.fEmQ = this.value; var pos = this.selectionStart; telaEmails(); var e = document.getElementById('emQ'); e.focus(); e.setSelectionRange(pos,pos); };
+  $app.querySelectorAll('[data-fem]').forEach(function(b){ b.onclick = function(){ S.fEm = b.dataset.fem; telaEmails(); }; });
+  $app.querySelectorAll('[data-conf]').forEach(function(b){ b.onclick = function(){
+    var id = b.dataset.conf;
+    api('emails_enviados?id=eq.' + id, { method: 'PATCH', body: { conferido: true }, prefer: 'return=minimal' }).then(function(){
+      var e = (S.emails || []).find(function(x){ return x.id === id; }); if (e) e.conferido = true; kvSet('emails', S.emails); telaEmails(); toast('Marcado como conferido.');
+    }, function(err){ toast('Não foi possível marcar: ' + String(err.message).slice(0,120)); });
+  }; });
+}
+function b64DeBytes(u8){ var s = '', i, n = 0x8000; for (i = 0; i < u8.length; i += n) s += String.fromCharCode.apply(null, u8.subarray(i, i + n)); return btoa(s); }
+/* envio direto pelo programa (função enviar-email no Supabase, via Brevo) */
+function enviarDireto(p, para, ass, msg, gid){
+  if (!navigator.onLine) return Promise.reject(new Error('sem internet — o envio direto precisa de conexão'));
+  var r = montarPdf(p, 'fabrica');
+  var bytes = r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes);
+  var corpo = { para: para, assunto: ass, mensagem: msg, pdf_base64: b64DeBytes(bytes), pdf_nome: r.nome, pedido_id: p.id, pedido_numero: p.numero, grupo: gid,
+    enviado_por: (CFG.vendedores[p.vendedor_codigo] || S.perfil.nome) + ' (Company Representações)', vendedor_codigo: p.vendedor_codigo, responder_para: S.sess && S.sess.user.email };
+  var go = function(){ return fetch(CFG.url + '/functions/v1/enviar-email', { method: 'POST', headers: headers(true), body: JSON.stringify(corpo) }); };
+  var pre = (S.sess && Date.now() > S.sess.expires_at) ? renovar() : Promise.resolve();
+  return pre.then(go).then(function(res){
+    return res.text().then(function(t){ var j = {}; try { j = JSON.parse(t); } catch(e){}
+      if (res.status === 404) throw new Error('o envio direto ainda não foi ligado no banco');
+      if (!res.ok) throw new Error(j.erro || t || ('Erro ' + res.status));
+      return j; });
+  });
 }
 
 /* ---------- roteador ---------- */
@@ -1526,6 +1603,7 @@ function render(){
   if (r.nome === 'cliente') return telaCliente(r.arg);
   if (r.nome === 'representadas') return telaRepresentadas();
   if (r.nome === 'representada') return telaRepresentada(r.arg);
+  if (r.nome === 'emails') return telaEmails();
   if (r.nome === 'mais') return telaMais();
   return telaPedidos();
 }
@@ -1546,8 +1624,8 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden &
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function(){});
 
-Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas')]).then(function(r){
-  S.reps = r[5] || [];
+Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas'), kvGet('emails')]).then(function(r){
+  S.reps = r[5] || []; S.emails = r[6] || [];
   S.pedidos = r[0] || {}; S.clientes = r[1] || []; S.fila = r[2] || []; S.cfila = r[4] || [];
   render(); sincronizar();
 });
