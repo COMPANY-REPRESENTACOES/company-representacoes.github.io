@@ -292,6 +292,58 @@ label.btn{cursor:pointer}
 .rep-n.on{background:#1c1c1e;color:#f2c14e}
 .rep-grp{margin-top:14px}
 .rep-gt{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px}
+
+/* ===== LAYOUT MODERNO (padrão do programa desde 23/11/2026, no estilo da aba Desempenho) ===== */
+:root{--seg:#e9e7e2;--line:#e7e4dd;--sh:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--seg:#26262a;--line:#33333a;--sh:0 1px 2px rgba(0,0,0,.4)}}
+:root[data-theme="dark"]{--seg:#26262a;--line:#33333a;--sh:0 1px 2px rgba(0,0,0,.4)}
+html,body{background:var(--bg)}
+main h1{font-size:26px;letter-spacing:-.4px}
+main h2{letter-spacing:-.2px}
+.card,button.card{border:0!important;border-radius:16px!important;box-shadow:var(--sh)!important}
+button.card:hover{box-shadow:0 0 0 2px #d99a2b,var(--sh)!important}
+.sheet{border-radius:20px 20px 0 0!important}@media (min-width:700px){.sheet{border-radius:20px!important}}
+.note{border-radius:12px!important}
+.badge{border-radius:999px!important}
+/* botões */
+.btn,.btn.sm,.btn:not(.pri):not(.ok){border-radius:10px!important;border:1.5px solid var(--line)!important;background:var(--surface)!important;color:var(--text);font-weight:700;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.btn:not(.pri):not(.ok):hover{background:var(--surface-2)!important;box-shadow:0 0 0 1px #d99a2b inset!important}
+.btn.pri,a.btn.pri{background:#1b1b1d!important;border-color:#1b1b1d!important;color:#f2c14e!important;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.btn.pri:hover{background:#000!important;filter:none}
+.btn.ok{background:#1baf7a!important;border-color:#1baf7a!important;color:#fff!important}
+.actions .btn.wa,.btn.wa{background:#25d366!important;border-color:#1ea952!important;color:#fff!important}
+.btn.sm{padding:6px 12px}
+.rm{border:1.5px solid var(--line)!important;border-radius:10px!important;background:var(--surface)}
+.rm:hover{border-color:#d92d20!important}
+/* filtros: segmento (igual ao seletor de período) */
+.chips{display:flex;flex-wrap:wrap;width:fit-content;max-width:100%;gap:2px;background:var(--seg);border-radius:12px;padding:3px;overflow:visible}
+.chip,.chip[aria-pressed="true"],:root .chip{border:0!important;background:transparent!important;border-radius:9px!important;padding:7px 12px;font-weight:700;color:var(--muted);box-shadow:none!important}
+.chip:hover{color:var(--text)}
+.chip[aria-pressed="true"]{background:#1b1b1d!important;color:#f2c14e!important;box-shadow:0 1px 3px rgba(0,0,0,.2)!important}
+/* chip solto (fora de grupo), ex.: Só disponíveis */
+.cat-sels .chip.so{border:1.5px solid var(--line)!important;background:var(--surface)!important;border-radius:10px!important}
+.cat-sels .chip.so[aria-pressed="true"]{background:#1b1b1d!important;border-color:#1b1b1d!important}
+/* campos */
+input.in,select.in,textarea.in,.price-in{border-radius:10px!important;border:1.5px solid var(--line)!important;background:var(--surface)}
+input.in:focus,select.in:focus,textarea.in:focus,.price-in:focus{border-color:#d99a2b!important;box-shadow:0 0 0 3px rgba(217,154,43,.15);outline:none}
+.qty{border-radius:10px!important;border:1.5px solid var(--line)!important}
+.lb{letter-spacing:.3px}
+/* cabeçalho e barras */
+.sync{border-radius:999px!important}
+nav.tabs a{border-radius:8px 8px 0 0}
+.actions{box-shadow:0 -6px 20px rgba(16,24,40,.06);border-top:0!important}
+table.tb th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:700}
+.cat-sec{border-radius:10px!important}
+.rep-arq img,.rep-pdf{border:1.5px solid var(--line)!important;border-radius:14px!important}
+.rep-logo-mini,.ped-logo{border-radius:10px!important}
+.rep-n{border-radius:999px}
+.chips-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.btn.sm.edit-it:not(.pri):not(.ok),.btn.edit-it:not(.pri):not(.ok){background:#1b1b1d!important;color:#f2c14e!important;border:1.5px solid #1b1b1d!important;box-shadow:0 0 0 3px rgba(217,154,43,.35)!important;font-weight:800}
+.btn.edit-it:not(.pri):not(.ok):hover{background:#000!important}
+.parc .pg div{border-radius:10px!important;border-color:var(--line)!important}.regra .rw{border-radius:10px}
+/* Desempenho acompanha o tema */
+.dz-k,.dz-c{background:var(--surface)}
+.dz-seg{background:var(--seg)}
 </style>
 </head>
 <body>
@@ -299,6 +351,6 @@ label.btn{cursor:pointer}
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261124b"></script>
+<script src="app.js?v=20261124c"></script>
 </body>
 </html>

@@ -434,12 +434,12 @@ function telaPedidos(){
   }).join('');
   var chipsOrg = [['','Todas as origens'],['express','Pedido Express'],['app','Lançados no app']].map(function(s){
     return '<button class="chip" data-org="' + s[0] + '" aria-pressed="' + (f.org === s[0]) + '">' + s[1] + '</button>';
-  }).join('') + (souAdmin() ? [['','Todos vendedores']].concat(Object.keys(CFG.vendedores).map(function(k){ return [k, CFG.vendedores[k]]; })).map(function(s){
+  }).join('') + (souAdmin() ? '</div><div class="chips">' + [['','Todos vendedores']].concat(Object.keys(CFG.vendedores).map(function(k){ return [k, CFG.vendedores[k]]; })).map(function(s){
     return '<button class="chip" data-vend="' + s[0] + '" aria-pressed="' + (f.vend === s[0]) + '">' + s[1] + '</button>';
   }).join('') : '');
   var html = '<div class="row"><h1 class="grow">Pedidos</h1><a class="btn pri" href="#novo">+ Novo pedido</a></div>' +
     '<input class="in" id="qBusca" placeholder="Buscar por cliente, CNPJ, cidade ou nº do pedido" value="' + esc(f.q) + '">' +
-    '<div class="chips" style="margin-top:10px">' + chipsSt + '</div><div class="chips" style="margin-top:6px">' + chipsOrg + '</div>' +
+    '<div class="chips" style="margin-top:10px">' + chipsSt + '</div><div class="chips-row"><div class="chips">' + chipsOrg + '</div></div>' +
     '<div class="list">' + (lista.length ? lista.map(cardPedido).join('') : '<div class="card empty">' + (todos.length ? 'Nenhum pedido com esse filtro.' : (S.lastSync ? 'Nenhum pedido ainda.' : 'Sincronizando os pedidos…')) + '</div>') + '</div>';
   casca(html);
   document.getElementById('qBusca').oninput = function(){ S.filtro.q = this.value; var pos = this.selectionStart; telaPedidos(); var e = document.getElementById('qBusca'); e.focus(); e.setSelectionRange(pos,pos); };
