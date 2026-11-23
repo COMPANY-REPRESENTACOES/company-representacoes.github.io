@@ -1135,7 +1135,7 @@ function editarRep(r, nova){
       if (c[3] === 'link') return '<button type="button" class="btn" data-lk="' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></button>';
       return '<label class="btn" for="rUp_' + c[0] + '">' + c[2] + ' <span class="rep-n" id="rN_' + c[0] + '">0</span></label>' +
         '<input type="file" data-up="' + c[0] + '" id="rUp_' + c[0] + '" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple hidden>'; }).join('') + '</div>' +
-    '<div class="muted" style="font-size:12.5px;margin-top:4px">Catálogos: coloque o arquivo no Google Drive, copie o link de compartilhamento e use “🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE”. Os outros anexos sobem direto (até 50 MB).</div>' +
+    '<div class="muted" style="font-size:12.5px;margin-top:4px">Catálogos: coloque o arquivo no Google Drive, copie o link de compartilhamento e use “🔗 ANEXAR LINK CATÁLOGO / GOOGLE DRIVE” (pode colocar vários links de uma vez com “＋ Mais um link”). Os outros anexos sobem direto (até 50 MB).</div>' +
     '<div class="muted" id="rUpSt" style="font-size:13px;margin-top:6px"></div>' +
     REP_ANEXOS.map(function(c){ return '<div class="rep-grp" id="rG_' + c[0] + '"><div class="rep-gt">' + c[1] + ' <span class="rep-n" id="rN2_' + c[0] + '">0</span></div><div id="rArqs_' + c[0] + '"></div></div>'; }).join('');
   function f(lb, inner){ return '<div class="fr"><label class="lb">' + lb + '</label><div class="fv">' + inner + '</div></div>'; }
@@ -1182,17 +1182,44 @@ function editarRep(r, nova){
     });
   }; });
   function abrirLink(catIni){
-    var m = modal(catIni === 'catalogo' ? 'Link do catálogo (Google Drive)' : 'Adicionar link',
+    var ph = catIni === 'catalogo' ? 'Ex.: Catálogo 2026' : 'Ex.: Catálogo 2026, Tabela Novembro';
+    function linhaLk(i){
+      return '<div class="lk-linha" style="border:1px solid #c9a227;border-radius:8px;padding:8px;margin-top:8px">' +
+        '<div class="row" style="justify-content:space-between"><b style="font-size:13px">Link ' + i + '</b>' +
+        '<button type="button" class="btn sm bad" data-lkrm>Remover</button></div>' +
+        '<label class="lb">Nome do arquivo</label><input class="in" data-lknome placeholder="' + ph + '">' +
+        '<label class="lb">Link (Google Drive, Dropbox, OneDrive…)</label><input class="in" data-lkurl inputmode="url" placeholder="https://drive.google.com/…"></div>';
+    }
+    var m = modal(catIni === 'catalogo' ? 'Links dos catálogos (Google Drive)' : 'Adicionar links',
       '<label class="lb">Onde guardar</label><select class="in" id="lkCat">' + REP_ANEXOS.map(function(c){ return '<option value="' + c[0] + '"' + (c[0] === catIni ? ' selected' : '') + '>' + c[1].replace('⭐ ','') + '</option>'; }).join('') + '</select>' +
-      '<label class="lb">Nome do arquivo</label><input class="in" id="lkNome" placeholder="' + (catIni === 'catalogo' ? 'Ex.: Catálogo 2026' : 'Ex.: Catálogo 2026, Tabela Novembro') + '">' +
-      '<label class="lb">Link (Google Drive, Dropbox, OneDrive…)</label><input class="in" id="lkUrl" inputmode="url" placeholder="https://drive.google.com/…">' +
+      '<div id="lkLista">' + linhaLk(1) + '</div>' +
+      '<button type="button" class="btn" id="lkMais" style="margin-top:8px">＋ Mais um link</button>' +
       '<p class="muted" style="font-size:12.5px">No Google Drive: botão direito no arquivo → Compartilhar → Acesso geral: “Qualquer pessoa com o link” → Copiar link.</p>' +
-      '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn pri" id="lkOk">Adicionar</button></div>');
+      '<div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn pri" id="lkOk">Adicionar links</button></div>');
+    var lista = m.body.querySelector('#lkLista');
+    function renumera(){
+      var ls = lista.querySelectorAll('.lk-linha');
+      ls.forEach(function(l, i){ l.querySelector('b').textContent = 'Link ' + (i + 1); l.querySelector('[data-lkrm]').hidden = ls.length < 2; });
+      lista.querySelectorAll('[data-lkrm]').forEach(function(b){ b.onclick = function(){ b.closest('.lk-linha').remove(); renumera(); }; });
+    }
+    renumera();
+    m.body.querySelector('#lkMais').onclick = function(){
+      lista.insertAdjacentHTML('beforeend', linhaLk(lista.children.length + 1)); renumera();
+      var ult = lista.lastElementChild.querySelector('[data-lknome]'); if (ult) ult.focus();
+    };
     m.body.querySelector('#lkOk').onclick = function(){
-      var url = m.body.querySelector('#lkUrl').value.trim(), nome = m.body.querySelector('#lkNome').value.trim(), cat = m.body.querySelector('#lkCat').value;
-      if (!/^https?:\/\//i.test(url)){ toast('Cole um link começando com https://'); return; }
-      d.anexos[cat].push({ url: url, nome: nome || 'Link', tipo: 'link' });
-      desenhaArqs(cat); m.ov.remove(); document.body.style.overflow = ''; el('rUpSt').textContent = 'Link adicionado — lembre de salvar.';
+      var cat = m.body.querySelector('#lkCat').value, novos = [], erro = false;
+      lista.querySelectorAll('.lk-linha').forEach(function(l, i){
+        var url = l.querySelector('[data-lkurl]').value.trim(), nome = l.querySelector('[data-lknome]').value.trim();
+        if (!url && !nome) return;
+        if (!/^https?:\/\//i.test(url)){ if (!erro) toast('Link ' + (i + 1) + ': cole um link começando com https://'); erro = true; return; }
+        novos.push({ url: url, nome: nome || 'Link', tipo: 'link' });
+      });
+      if (erro) return;
+      if (!novos.length){ toast('Cole pelo menos um link.'); return; }
+      novos.forEach(function(a){ d.anexos[cat].push(a); });
+      desenhaArqs(cat); m.ov.remove(); document.body.style.overflow = '';
+      el('rUpSt').textContent = (novos.length > 1 ? novos.length + ' links adicionados' : 'Link adicionado') + ' — lembre de salvar.';
     };
   }
   $app.querySelectorAll('[data-lk]').forEach(function(b){ b.onclick = function(){ abrirLink(b.dataset.lk); }; });
