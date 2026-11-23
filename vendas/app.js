@@ -539,11 +539,13 @@ function abrirCatalogo(){
   }
   function desenha(){
     var mar = g.marcas.find(function(x){ return x.id === st.marca; });
-    var q = st.q.toLowerCase(), cats = catsDe(mar, mainCat), subs = st.cat ? catsDe(mar, subCat, function(i){ return mainCat(i) === st.cat; }) : [];
+    var isTag = st.cat.indexOf('#tag:') === 0, tagSel = isTag ? st.cat.slice(5) : '';
+    var q = st.q.toLowerCase(), cats = catsDe(mar, mainCat), tags = catsDe(mar, function(i){ return i.tag || ''; }), subs = st.cat && !isTag ? catsDe(mar, subCat, function(i){ return mainCat(i) === st.cat; }) : [];
     var pool = q ? g.marcas.reduce(function(a, mm){ return a.concat(mm.itens.map(function(i){ return { i: i, m: mm }; })); }, []) : mar.itens.map(function(i){ return { i: i, m: mar }; });
     var itens = pool.filter(function(x){
       if (st.so && !x.i.av[pid]) return false;
-      if (!q && st.cat && mainCat(x.i) !== st.cat) return false;
+      if (!q && isTag && x.i.tag !== tagSel) return false;
+      if (!q && st.cat && !isTag && mainCat(x.i) !== st.cat) return false;
       if (!q && st.sub && subCat(x.i) !== st.sub) return false;
       return !q || (x.i.cod + ' ' + x.i.desc + ' ' + x.i.cat).toLowerCase().indexOf(q) > -1; });
     var LIM = 300, corte = itens.length > LIM; itens = itens.slice(0, LIM);
@@ -554,6 +556,7 @@ function abrirCatalogo(){
       '<div class="cat-sels">' +
       (g.marcas.length > 1 ? '<div><label class="lb">Linha de produtos</label><select class="in" id="cM">' + g.marcas.map(function(mm){ return '<option value="' + mm.id + '"' + (st.marca === mm.id ? ' selected' : '') + '>' + esc(mm.nome) + ' (' + mm.itens.length + ')</option>'; }).join('') + '</select></div>' : '') +
       (q ? '' : '<div><label class="lb">Categoria</label><select class="in" id="cC"><option value="">Todas (' + mar.itens.length + ')</option>' +
+        tags.map(function(t){ var v = '#tag:' + t.nome; return '<option value="' + esc(v) + '"' + (st.cat === v ? ' selected' : '') + '>★ ' + esc(t.nome) + ' (' + t.n + ')</option>'; }).join('') +
         cats.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.cat === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></div>' +
         (subs.length > 1 ? '<div><label class="lb">Subcategoria</label><select class="in" id="cS"><option value="">Todas</option>' + subs.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.sub === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></div>' : '')) +
       '<div class="so"><button class="chip" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div></div>' +
