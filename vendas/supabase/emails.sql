@@ -24,3 +24,6 @@ create policy "emails ler" on public.emails_enviados for select to authenticated
 drop policy if exists "emails conferir" on public.emails_enviados;
 create policy "emails conferir" on public.emails_enviados for update to authenticated using (true) with check (true);
 -- a gravação dos envios e da leitura é feita pelas funções enviar-email e abriu (chave de serviço)
+-- permissões da tabela (o banco não libera tabelas novas sozinho)
+grant select, insert, update on table public.emails_enviados to service_role;
+grant select, update on table public.emails_enviados to authenticated;
