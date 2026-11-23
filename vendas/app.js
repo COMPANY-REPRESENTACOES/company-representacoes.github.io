@@ -245,7 +245,9 @@ function telaLogin(msg){
     '<form id="fLogin"><label class="lb">E-mail</label><input class="in" type="email" id="lEmail" autocomplete="username" required>' +
     '<label class="lb">Senha</label><input class="in" type="password" id="lSenha" autocomplete="current-password" required>' +
     '<button class="btn pri" style="width:100%;margin-top:14px" id="lBtn">Entrar</button></form>' +
+    '<div style="text-align:center;margin-top:12px"><a href="#" id="lEsqueci" style="color:#b07a12;font-weight:700;font-size:14px">Esqueci minha senha</a></div>' +
     '<p class="muted" style="font-size:12.5px;text-align:center;margin-top:14px">O primeiro acesso precisa de internet. Depois o app funciona offline.</p></div></div>';
+  document.getElementById('lEsqueci').onclick = function(ev){ ev.preventDefault(); telaEsqueci(document.getElementById('lEmail').value.trim()); };
   document.getElementById('fLogin').onsubmit = function(ev){
     ev.preventDefault();
     var b = document.getElementById('lBtn'); b.disabled = true; b.textContent = 'Entrando…';
@@ -254,6 +256,76 @@ function telaLogin(msg){
       .catch(function(e){ S.sess = null; lsSet('cv_sess', null); telaLogin(e.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : e.message); });
   };
 }
+
+/* ---------- recuperação de senha (Supabase: e-mail com link → nova senha) ---------- */
+var URL_APP = location.origin + location.pathname;
+function cartaoLogin(inner){ $app.innerHTML = '<div class="wrap"><div class="login card pad"><img src="company.png" alt="Company Representações">' + inner + '</div></div>'; }
+function telaEsqueci(email, msg, ok){
+  cartaoLogin('<h1 style="text-align:center">Recuperar senha</h1>' +
+    (msg ? '<div class="note ' + (ok ? 'ok' : 'bad') + '"' + (ok ? ' style="background:#e8f6ec;border-color:#2e9e5b;color:#1d6b3c"' : '') + '>' + esc(msg) + '</div>' : '') +
+    (ok ? '' : '<p class="muted" style="font-size:13.5px">Digite o e-mail do seu login. Vamos enviar um link para você criar uma senha nova.</p>' +
+      '<form id="fEsq"><label class="lb">E-mail</label><input class="in" type="email" id="eEmail" autocomplete="username" required value="' + esc(email || '') + '">' +
+      '<button class="btn pri" style="width:100%;margin-top:14px" id="eBtn">Enviar link de recuperação</button></form>') +
+    '<div style="text-align:center;margin-top:14px"><a href="#" id="eVolta" style="color:#b07a12;font-weight:700;font-size:14px">← Voltar para o login</a></div>');
+  document.getElementById('eVolta').onclick = function(ev){ ev.preventDefault(); telaLogin(); };
+  var f = document.getElementById('fEsq'); if (!f) return;
+  f.onsubmit = function(ev){
+    ev.preventDefault();
+    var em = document.getElementById('eEmail').value.trim(), b = document.getElementById('eBtn');
+    if (!navigator.onLine){ telaEsqueci(em, 'Sem internet. Conecte-se para recuperar a senha.'); return; }
+    b.disabled = true; b.textContent = 'Enviando…';
+    fetch(CFG.url + '/auth/v1/recover?redirect_to=' + encodeURIComponent(URL_APP), { method:'POST', headers: headers(false), body: JSON.stringify({ email: em }) })
+      .then(function(r){ if (r.ok) return; return r.json().catch(function(){ return {}; }).then(function(j){ throw new Error(j.msg || j.error_description || j.message || ('Erro ' + r.status)); }); })
+      .then(function(){ telaEsqueci(em, 'Pronto! Se este e-mail tiver login no sistema, você vai receber em instantes um e-mail com o link "Reset Password". Abra o e-mail neste aparelho, toque no link e crie a senha nova. Confira também a caixa de spam.', true); },
+        function(e){ var m = String(e.message || e);
+          telaEsqueci(em, /rate|limit|seconds|429/i.test(m) ? 'Muitos pedidos de recuperação seguidos. Aguarde alguns minutos e tente de novo.' : 'Não foi possível enviar: ' + m.slice(0, 150)); });
+  };
+}
+function telaNovaSenha(msg){
+  cartaoLogin('<h1 style="text-align:center">Criar senha nova</h1>' +
+    (msg ? '<div class="note bad">' + esc(msg) + '</div>' : '') +
+    (S.recup.email ? '<p class="muted" style="text-align:center;font-size:13.5px">' + esc(S.recup.email) + '</p>' : '') +
+    '<form id="fNova"><label class="lb">Nova senha</label><input class="in" type="password" id="nS1" autocomplete="new-password" minlength="6" required>' +
+    '<label class="lb">Repita a nova senha</label><input class="in" type="password" id="nS2" autocomplete="new-password" minlength="6" required>' +
+    '<p class="muted" style="font-size:12.5px">Mínimo de 6 caracteres.</p>' +
+    '<button class="btn pri" style="width:100%;margin-top:8px" id="nBtn">Salvar senha nova e entrar</button></form>' +
+    '<div style="text-align:center;margin-top:14px"><a href="#" id="nVolta" style="color:#b07a12;font-weight:700;font-size:14px">Cancelar</a></div>');
+  document.getElementById('nVolta').onclick = function(ev){ ev.preventDefault(); S.recup = null; telaLogin(); };
+  document.getElementById('fNova').onsubmit = function(ev){
+    ev.preventDefault();
+    var s1 = document.getElementById('nS1').value, s2 = document.getElementById('nS2').value, b = document.getElementById('nBtn');
+    if (s1.length < 6){ telaNovaSenha('A senha precisa ter pelo menos 6 caracteres.'); return; }
+    if (s1 !== s2){ telaNovaSenha('As duas senhas não são iguais. Digite de novo.'); return; }
+    b.disabled = true; b.textContent = 'Salvando…';
+    var rc = S.recup;
+    fetch(CFG.url + '/auth/v1/user', { method:'PUT', headers: { 'apikey': CFG.key, 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + rc.access_token }, body: JSON.stringify({ password: s1 }) })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) throw new Error(j.msg || j.error_description || j.message || ('Erro ' + r.status)); return j; }); })
+      .then(function(u){
+        S.recup = null;
+        guardarSessao({ access_token: rc.access_token, refresh_token: rc.refresh_token, expires_in: rc.expires_in, user: { id: u.id, email: u.email } });
+        S.perfil = null; toast('Senha alterada com sucesso!', 4000);
+        return carregarPerfil().then(function(){ location.hash = '#pedidos'; render(); return sincronizar(); });
+      })
+      .catch(function(e){ var m = String(e.message || e);
+        if (/expired|invalid|jwt|401|403/i.test(m)){ S.recup = null; telaEsqueci('', 'O link de recuperação expirou. Peça um novo link abaixo.'); return; }
+        if (/same|different from the old/i.test(m)){ telaNovaSenha('A senha nova precisa ser diferente da senha antiga.'); return; }
+        if (/weak|short|characters/i.test(m)){ telaNovaSenha('Senha fraca: use pelo menos 6 caracteres, misturando letras e números.'); return; }
+        telaNovaSenha('Não foi possível salvar: ' + m.slice(0, 150)); });
+  };
+}
+/* volta do link do e-mail: #access_token=…&type=recovery (ou #error=…) */
+(function(){
+  var h = location.hash.replace(/^#/, '');
+  if (!/(^|&)(access_token|error)=/.test(h)) return;
+  var q = {}; h.split('&').forEach(function(kv){ var i = kv.indexOf('='); if (i > 0) q[decodeURIComponent(kv.slice(0,i))] = decodeURIComponent(kv.slice(i+1).replace(/\+/g,' ')); });
+  history.replaceState(null, '', location.pathname + location.search);
+  if (q.type === 'recovery' && q.access_token){
+    var em = ''; try { em = JSON.parse(atob(q.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).email || ''; } catch(e){}
+    S.recup = { access_token: q.access_token, refresh_token: q.refresh_token, expires_in: +q.expires_in || 3600, email: em };
+  } else if (q.error){
+    S.recupErr = /expired|otp/i.test((q.error_code||'') + (q.error_description||'')) ? 'O link de recuperação expirou ou já foi usado. Peça um novo link abaixo.' : 'Link de recuperação inválido: ' + (q.error_description || q.error);
+  }
+})();
 
 function listaPedidos(){
   var arr = Object.keys(S.pedidos).map(function(k){ return S.pedidos[k]; });
@@ -1257,6 +1329,8 @@ function subirArquivo(pasta, file){
 }
 
 function render(){
+  if (S.recup) return telaNovaSenha();
+  if (S.recupErr){ var re = S.recupErr; S.recupErr = ''; return telaEsqueci('', re); }
   if (!S.sess){ telaLogin(S.syncErr && /Sessão/.test(S.syncErr) ? S.syncErr : ''); return; }
   if (!S.perfil){ casca('<div class="card empty">Carregando seu perfil…</div>'); carregarPerfil().then(render, function(e){ telaLogin(e.message); S.sess = null; lsSet('cv_sess', null); }); return; }
   var r = rota();
