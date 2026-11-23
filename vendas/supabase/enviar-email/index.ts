@@ -5,6 +5,11 @@
 //   (SENDER_EMAIL / SENDER_NAME servem de padrão para quem não tiver o seu)
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const chaveServico = () => {
+  try { const o = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}"); const v = o.default || Object.values(o)[0]; if (v) return String(v); } catch (_) { /* usa a antiga */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+};
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -17,7 +22,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ erro: "use POST" }, 405);
   const URL_ = Deno.env.get("SUPABASE_URL")!;
-  const SRV = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const SRV = chaveServico();
   const KEY = Deno.env.get("BREVO_API_KEY");
   if (!KEY) return json({ erro: "envio direto ainda não configurado (falta BREVO_API_KEY)" }, 500);
 
