@@ -9,6 +9,53 @@ var STATUS = [
   ['enviado_fabrica','Enviado à fábrica'],['faturado','Faturado'],['cancelado','Cancelado']
 ];
 var STATUS_NOME = {}; STATUS.forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
+/* regras comerciais por representada (pedido mínimo, à vista, prazos com valor mínimo por duplicata) */
+var REGRAS = {
+  vector: { minimo: 1000, minDup: 500, avista: { nome: 'À vista PIX (5% de desconto)', desc: 5 },
+    prazos: [ { p: '30 dd' }, { p: '30/60' }, { p: '30/45/60' }, { p: '30/60/90' }, { p: '30/45/60/75/90' },
+      { p: '30/60/90/120', acima: 5000 }, { p: '30/45/60/75/90/105', acima: 5000 }, { p: '30/45/60/75/90/105/120', acima: 5000 } ] }
+};
+function regraDe(gid){ return REGRAS[gid] || null; }
+function nParcelas(pz){ return String(pz).split('/').length; }
+/* devolve '' se o prazo vale para esse total, ou o motivo se não vale */
+function prazoMotivo(r, op, tot){
+  if (op.acima && tot <= op.acima) return 'só acima de ' + fmt(op.acima);
+  var n = nParcelas(op.p); if (r.minDup && tot / n < r.minDup) return 'duplicata abaixo de ' + fmt(r.minDup);
+  return '';
+}
+function eAvista(p){ var r = regraDe(p.grupo); return !!(r && r.avista && p.prazo === r.avista.nome); }
+function descAvista(p, tot){ var r = regraDe(p.grupo); return eAvista(p) ? r2(tot * r.avista.desc / 100) : 0; }
+/* avisos das regras: [] quando está tudo certo */
+function avisosRegra(p){
+  var r = regraDe(p.grupo); if (!r) return [];
+  var tot = totalItens(p.itens), av = [];
+  if (r.minimo && tot < r.minimo) av.push('Pedido mínimo ' + fmt(r.minimo) + ' (faltam ' + fmt(r2(r.minimo - tot)) + ').');
+  if (!p.prazo) av.push('Escolha o prazo de pagamento.');
+  else if (!eAvista(p)){ var op = r.prazos.find(function(x){ return x.p === p.prazo; }); var mo = op ? prazoMotivo(r, op, tot) : 'prazo fora da política'; if (mo) av.push('Prazo ' + p.prazo + ' não vale para ' + fmt(tot) + ': ' + mo + '.'); }
+  return av;
+}
+function confereRegra(p, acao){ var av = avisosRegra(p); return !av.length || confirm(av.join('\n') + '\n\n' + acao + ' mesmo assim?'); }
+function prazoCampo(p, travado){
+  var r = regraDe(p.grupo);
+  if (!r) return '<input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"><datalist id="prazosL">' + PRAZOS.map(function(x){ return '<option value="' + x + '">'; }).join('') + '</datalist>';
+  var tot = totalItens(p.itens), conhecidos = [r.avista && r.avista.nome].concat(r.prazos.map(function(x){ return x.p; }));
+  var o = '<option value="">Selecione</option>';
+  if (p.prazo && conhecidos.indexOf(p.prazo) < 0) o += '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>';
+  if (r.avista) o += '<option value="' + esc(r.avista.nome) + '"' + (p.prazo === r.avista.nome ? ' selected' : '') + '>' + esc(r.avista.nome) + '</option>';
+  r.prazos.forEach(function(x){ var mo = prazoMotivo(r, x, tot); o += '<option value="' + esc(x.p) + '"' + (p.prazo === x.p ? ' selected' : '') + (mo && p.prazo !== x.p ? ' disabled' : '') + '>' + esc(x.p) + (mo ? ' — ' + mo : '') + '</option>'; });
+  return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + o + '</select>';
+}
+function regraBox(p){
+  var r = regraDe(p.grupo); if (!r) return '';
+  var tot = totalItens(p.itens), d = descAvista(p, tot), av = avisosRegra(p);
+  return '<div class="regra">' + (d ? '<div class="rl"><span>Desconto à vista PIX ' + r.avista.desc + '%</span><span>− ' + fmt(d) + '</span></div><div class="rl tt"><span>Total à vista</span><span>' + fmt(r2(tot - d)) + '</span></div>' : '') +
+    (av.length ? av.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') : '') +
+    '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': pedido mínimo ' + fmt(r.minimo) + (r.avista ? ' · à vista PIX ' + r.avista.desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>';
+}
+function atualizaRegra(){
+  if (!ED) return; var el = document.getElementById('eRegra'); if (el) el.innerHTML = regraBox(ED.p);
+  var pz = document.getElementById('ePrazo'); if (pz && pz.tagName === 'SELECT'){ var tmp = document.createElement('div'); tmp.innerHTML = prazoCampo(ED.p, pz.disabled); pz.innerHTML = tmp.firstChild.innerHTML; }
+}
 var PRAZOS = ['À vista','28 dias','30/60','30/60/90','28/56/84','30/45/60','30/45/60/75','15/30/45/60/75','30/45/60/75/90','15/30/45/60/75/90'];
 
 function fmt(v){ return 'R$ ' + (Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -408,18 +455,18 @@ function telaEditor(){
       '<div><label class="lb">Telefone / WhatsApp</label><input class="in" data-c="phone" type="tel" value="' + esc(c.phone) + '"></div>' +
       '<div><label class="lb">Cidade / UF</label><input class="in" data-c="city" value="' + esc(c.city) + '"></div>' +
       '<div><label class="lb">Transportadora</label><input class="in" data-c="carrier" value="' + esc(c.carrier) + '"></div>' +
-      '<div><label class="lb">Prazo de pagamento</label><input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"><datalist id="prazosL">' + PRAZOS.map(function(x){ return '<option value="' + x + '">'; }).join('') + '</datalist></div>' +
+      '<div><label class="lb">Prazo de pagamento</label>' + prazoCampo(p, travado) + '</div>' +
     '</div><label class="lb">Observação</label><textarea class="in" id="eObs" rows="2">' + esc(p.obs) + '</textarea></div>' +
     '<div class="row" style="margin-top:16px"><h2 class="grow" style="margin:0">Itens (' + p.itens.length + ')</h2>' + (travado ? '' : '<button class="btn sm pri" id="eAdd">+ Adicionar produto</button>') + '</div>' +
     '<div class="card" style="margin-top:8px"><div class="pad" id="eItens">' + (p.itens.length ? p.itens.map(function(it, i){ return linhaItem(p, it, i, travado); }).join('') : '<div class="empty">Nenhum item. Toque em “Adicionar produto”.</div>') + '</div>' +
-      '<div class="totbar"><span>Total</span><span id="eTot">' + fmt(totalItens(p.itens)) + '</span></div></div>' +
+      '<div class="totbar"><span>Total</span><span id="eTot">' + fmt(totalItens(p.itens)) + '</span></div><div id="eRegra">' + regraBox(p) + '</div></div>' +
     (orig && !ED.novo ? '<div class="row" style="margin-top:12px"><button class="btn sm" id="eOrig">Ver o que o cliente enviou' + (r2(orig.total) !== totalItens(p.itens) ? ' (total original ' + fmt(orig.total) + ')' : '') + '</button>' +
       '<button class="btn sm" id="eHist">Histórico de alterações</button></div>' : '');
   var acoes = '<button class="btn" id="ePdf">Gerar espelho PDF</button><button class="btn" id="eMail">✉ Enviar por e-mail</button><button class="btn wa" id="eWa">Enviar por WhatsApp</button><button class="btn pri" id="eSalvar">' + (ED.novo ? 'Salvar pedido' : 'Salvar alterações') + '</button>';
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
-  document.getElementById('ePrazo').oninput = function(){ ED.p.prazo = this.value; marcar(); };
+  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ ED.p.prazo = this.value; marcar(); atualizaRegra(); };
   document.getElementById('eObs').oninput = function(){ ED.p.obs = this.value; marcar(); };
   document.getElementById('eSt').onchange = function(){ ED.p.status = this.value; marcar(); telaEditor(); };
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
@@ -428,10 +475,11 @@ function telaEditor(){
   prepararFotos(ED.p);
   document.getElementById('ePdf').onclick = function(){
     var pp = ED.p;
+    if (!confereRegra(pp, 'Gerar o PDF')) return;
     comFotos(pp, function(){ gerarEspelho(pp); });
   };
-  document.getElementById('eMail').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } telaEmail(ED.p); };
-  document.getElementById('eWa').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } comFotos(ED.p, function(){ enviarWhatsApp(ED.p); }); };
+  document.getElementById('eMail').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } if (!confereRegra(ED.p, 'Enviar')) return; telaEmail(ED.p); };
+  document.getElementById('eWa').onclick = function(){ if (!ED.p.itens.length){ toast('Adicione pelo menos um item.'); return; } if (!confereRegra(ED.p, 'Enviar')) return; comFotos(ED.p, function(){ enviarWhatsApp(ED.p); }); };
   var bo = document.getElementById('eOrig'); if (bo) bo.onclick = verOriginal;
   var bh = document.getElementById('eHist'); if (bh) bh.onclick = verHistorico;
   ligarItens(travado);
@@ -455,7 +503,7 @@ function ligarItens(travado){
   if (travado) return;
   $app.querySelectorAll('.it').forEach(function(row){
     var i = +row.dataset.i, it = ED.p.itens[i];
-    var upd = function(){ ED.sujo = true; var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); };
+    var upd = function(){ ED.sujo = true; var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
     row.querySelector('[data-q]').onchange = function(){ var v = parseInt(this.value,10); it.qty = v > 0 ? v : 1; this.value = it.qty; upd(); };
@@ -479,6 +527,7 @@ function salvarPedido(){
   var p = ED.p;
   if (!p.itens.length){ toast('Adicione pelo menos um item.'); return; }
   if (!(p.cliente && p.cliente.name)){ toast('Informe o nome do cliente.'); return; }
+  if (!confereRegra(p, 'Salvar')) return;
   p.total = totalItens(p.itens);
   var marcas = []; p.itens.forEach(function(i){ if (i.marca && marcas.indexOf(i.marca) < 0) marcas.push(i.marca); });
   if (marcas.length) p.marca = marcas.join(' + ');
@@ -1037,6 +1086,8 @@ function montarPdf(p, modo){
   doc.text(W - M - 10, y + 31, fmt(tot), { size: 14, bold: true, color: RED, align: 'right' });
   doc.text(M, y + 14, 'Prazo de pagamento: ' + (p.prazo || '—'), { size: 8.5, bold: true, color: RED });
   doc.text(M, y + 26, 'Política ' + politicaNome(p.grupo, p.politica) + ' · Total em preço de tabela ' + fmt(somaTab) + ' · Descontos ' + fmt(Math.max(0, somaTab - tot)), { size: 8, color: MUTED });
+  var dAv = descAvista(p, tot);
+  if (dAv){ doc.text(M, y + 40, 'À VISTA PIX: desconto ' + regraDe(p.grupo).avista.desc + '% (− ' + fmt(dAv) + ') · TOTAL À VISTA ' + fmt(r2(tot - dAv)), { size: 9, bold: true, color: RED }); y += 8; }
   y += 56;
   if (obs.length){ doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED }); y += 6; var oh = obs.length*12 + 12; doc.rect(M, y, CW, oh, null, LINE, 0.8); obs.forEach(function(l,i){ doc.text(M+10, y+15+i*12, l, { size: 9 }); }); y += oh + 16; }
   y = Math.max(y + 30, Math.min(BOTTOM - 20, y + 40)); var sw = (CW - 40)/2;
