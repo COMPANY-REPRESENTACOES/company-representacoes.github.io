@@ -171,7 +171,13 @@ function sincronizar(manual){
   }).catch(function(e){
     S.syncErr = (e && e.auth) ? e.message : 'Não foi possível sincronizar agora (' + String(e && e.message || e).slice(0,120) + ')';
     if (e && e.auth){ S.sess = null; lsSet('cv_sess', null); }
-  }).then(function(){ S.syncing = false; render(); });
+  }).then(function(){ S.syncing = false; if (emFormulario()) topo(); else render(); });
+}
+/* telas de cadastro abertas (representada em edição, cliente): a sincronização não redesenha, para não perder o que foi digitado/anexado */
+function emFormulario(){
+  if (!S.sess || !S.perfil || S.recup) return false;
+  var r = rota();
+  return r.nome === 'cliente' || (r.nome === 'representada' && /\/editar$/.test(r.arg));
 }
 function enviarOp(op){
   var p = S.pedidos[op.id]; if (!p) return Promise.resolve();
