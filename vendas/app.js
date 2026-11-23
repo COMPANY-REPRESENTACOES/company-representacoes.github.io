@@ -519,33 +519,51 @@ function verHistorico(){
 function abrirCatalogo(){
   var p = ED.p, g = grupo(p.grupo), pid = politicaId(p.grupo, p.politica);
   if (!g){ toast('Catálogo deste grupo não está no aparelho.'); return; }
-  var st = { marca: g.marcas[0].id, q: '', so: false };
+  var st = { marca: g.marcas[0].id, cat: '', sub: '', q: '', so: false };
+  function mainCat(i){ return String(i.cat || 'Outros').split(' · ')[0]; }
+  function subCat(i){ var p = String(i.cat || '').split(' · '); return p.length > 1 ? p.slice(1).join(' · ') : ''; }
   var m = modal('Adicionar produto · ' + g.nome, '');
+  function catsDe(mar, fn, filtro){ var o = [], c = {}; mar.itens.forEach(function(i){ if (filtro && !filtro(i)) return; var k = fn(i); if (!k) return; if (!(k in c)){ c[k] = 0; o.push(k); } c[k]++; }); return o.map(function(k){ return { nome: k, n: c[k] }; }); }
+  function cartao(x, q){
+    var it = x.i, pr = it.p[pid], av = it.av[pid], tiers = it.tiers && it.tiers[pid];
+    var opts = '';
+    if (!av || pr == null) opts = '<span class="muted" style="font-size:12.5px">' + (pr == null ? 'Preço sob consulta — ' : '') + (av ? '' : 'indisponível — ') + '</span><button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '">Adicionar mesmo assim</button>';
+    else if (tiers) opts = tiers.map(function(t, ti){ return '<button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '" data-t="' + ti + '">' + esc(t.label) + ' · ' + fmt(t.unit) + '</button>'; }).join('');
+    else if (it.cores) opts = it.cores.map(function(cor){ return '<button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '" data-cor="' + esc(cor) + '">+ ' + esc(cor) + '</button>'; }).join('');
+    else opts = '<button class="btn sm pri" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '">+ Adicionar</button>';
+    return '<div class="cat-it' + (av ? '' : ' unav') + '"><img src="' + esc(it.img || 'company.png') + '" loading="lazy" alt="" onerror="this.src=\'company.png\'"><div>' +
+      '<div><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + (av ? '' : '<span class="tag ind">INDISPONÍVEL</span>') + (q ? ' <span class="muted" style="font-size:12px">· ' + esc(x.m.nome) + '</span>' : '') + '</div>' +
+      '<div class="muted" style="font-size:13px">' + esc(it.desc) + '</div>' +
+      '<div class="pr">' + (pr == null ? 'Sob consulta' : fmt(pr)) + (it.o && it.o[pid] ? ' <s class="muted" style="font-weight:500">' + fmt(it.o[pid]) + '</s>' : '') + '</div>' +
+      '<div class="opts">' + opts + '</div></div></div>';
+  }
   function desenha(){
     var mar = g.marcas.find(function(x){ return x.id === st.marca; });
-    var q = st.q.toLowerCase();
+    var q = st.q.toLowerCase(), cats = catsDe(mar, mainCat), subs = st.cat ? catsDe(mar, subCat, function(i){ return mainCat(i) === st.cat; }) : [];
     var pool = q ? g.marcas.reduce(function(a, mm){ return a.concat(mm.itens.map(function(i){ return { i: i, m: mm }; })); }, []) : mar.itens.map(function(i){ return { i: i, m: mar }; });
-    var itens = pool.filter(function(x){ if (st.so && !x.i.av[pid]) return false; return !q || (x.i.cod + ' ' + x.i.desc + ' ' + x.i.cat).toLowerCase().indexOf(q) > -1; }).slice(0, 150);
-    m.body.innerHTML = '<input class="in" id="cQ" placeholder="Buscar código ou nome em todas as marcas" value="' + esc(st.q) + '">' +
-      '<div class="chips" style="margin-top:8px">' + g.marcas.map(function(mm){ return '<button class="chip" data-m="' + mm.id + '" aria-pressed="' + (!q && st.marca === mm.id) + '">' + esc(mm.nome) + ' <span class="ct">' + mm.itens.length + '</span></button>'; }).join('') +
-      '<button class="chip" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div>' +
-      '<div class="muted" style="font-size:12px;margin:6px 0">' + esc(mar.sub || '') + ' · preços da política ' + esc(politicaNome(p.grupo, pid)) + '</div>' +
-      itens.map(function(x){
-        var it = x.i, pr = it.p[pid], av = it.av[pid], tiers = it.tiers && it.tiers[pid];
-        var opts = '';
-        if (!av || pr == null) opts = '<span class="muted" style="font-size:12.5px">' + (pr == null ? 'Preço sob consulta — ' : '') + (av ? '' : 'indisponível — ') + '</span><button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '">Adicionar mesmo assim</button>';
-        else if (tiers) opts = tiers.map(function(t, ti){ return '<button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '" data-t="' + ti + '">' + esc(t.label) + ' · ' + fmt(t.unit) + '</button>'; }).join('');
-        else if (it.cores) opts = it.cores.map(function(cor){ return '<button class="btn sm" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '" data-cor="' + esc(cor) + '">+ ' + esc(cor) + '</button>'; }).join('');
-        else opts = '<button class="btn sm pri" data-add="' + esc(it.k) + '" data-mm="' + x.m.id + '">+ Adicionar</button>';
-        return '<div class="cat-it' + (av ? '' : ' unav') + '"><img src="' + esc(it.img || 'company.png') + '" loading="lazy" alt="" onerror="this.src=\'company.png\'"><div>' +
-          '<div><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + (av ? '' : '<span class="tag ind">INDISPONÍVEL</span>') + (q ? ' <span class="muted" style="font-size:12px">· ' + esc(x.m.nome) + '</span>' : '') + '</div>' +
-          '<div class="muted" style="font-size:13px">' + esc(it.desc) + '</div>' +
-          '<div class="pr">' + (pr == null ? 'Sob consulta' : fmt(pr)) + (it.o && it.o[pid] ? ' <s class="muted" style="font-weight:500">' + fmt(it.o[pid]) + '</s>' : '') + '</div>' +
-          '<div class="opts">' + opts + '</div></div></div>';
-      }).join('') + (itens.length ? '' : '<div class="empty">Nada encontrado.</div>');
+    var itens = pool.filter(function(x){
+      if (st.so && !x.i.av[pid]) return false;
+      if (!q && st.cat && mainCat(x.i) !== st.cat) return false;
+      if (!q && st.sub && subCat(x.i) !== st.sub) return false;
+      return !q || (x.i.cod + ' ' + x.i.desc + ' ' + x.i.cat).toLowerCase().indexOf(q) > -1; });
+    var LIM = 300, corte = itens.length > LIM; itens = itens.slice(0, LIM);
+    var lista = '';
+    if (q) lista = itens.map(function(x){ return cartao(x, q); }).join('');
+    else { var atual = null; itens.forEach(function(x){ var c = x.i.cat || 'Outros'; if (c !== atual){ atual = c; lista += '<div class="cat-sec">' + esc(c) + '</div>'; } lista += cartao(x, q); }); }
+    m.body.innerHTML = '<div class="cat-top"><input class="in" id="cQ" placeholder="Buscar código ou nome em todas as linhas" value="' + esc(st.q) + '">' +
+      (g.marcas.length > 1 ? '<div class="lb" style="margin:8px 0 4px">Linha de produtos</div><div class="chips wrap">' + g.marcas.map(function(mm){ return '<button class="chip" data-m="' + mm.id + '" aria-pressed="' + (!q && st.marca === mm.id) + '">' + esc(mm.nome) + ' <span class="ct">' + mm.itens.length + '</span></button>'; }).join('') + '</div>' : '') +
+      (q ? '' : '<div class="lb" style="margin:8px 0 4px">Categoria</div><div class="chips wrap cats"><button class="chip" data-c="" aria-pressed="' + (!st.cat) + '">Todas <span class="ct">' + mar.itens.length + '</span></button>' +
+        cats.map(function(c){ return '<button class="chip" data-c="' + esc(c.nome) + '" aria-pressed="' + (st.cat === c.nome) + '">' + esc(c.nome) + ' <span class="ct">' + c.n + '</span></button>'; }).join('') + '</div>' +
+        (subs.length > 1 ? '<div class="chips wrap" style="margin-top:6px"><button class="chip sub" data-s="" aria-pressed="' + (!st.sub) + '">Todos</button>' + subs.map(function(c){ return '<button class="chip sub" data-s="' + esc(c.nome) + '" aria-pressed="' + (st.sub === c.nome) + '">' + esc(c.nome) + ' <span class="ct">' + c.n + '</span></button>'; }).join('') + '</div>' : '')) +
+      '<div class="chips wrap" style="margin-top:6px"><button class="chip" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div>' +
+      '<div class="muted" style="font-size:12px;margin-top:6px">' + esc(q ? 'Resultado da busca em todas as linhas' : (mar.sub || '')) + ' · preços da política ' + esc(politicaNome(p.grupo, pid)) + '</div></div>' +
+      lista + (itens.length ? '' : '<div class="empty">Nada encontrado.</div>') +
+      (corte ? '<div class="muted" style="text-align:center;padding:10px">Mostrando os primeiros ' + LIM + '. Escolha uma categoria ou use a busca para ver os demais.</div>' : '');
+    m.body.querySelectorAll('[data-c]').forEach(function(b){ b.onclick = function(){ st.cat = b.dataset.c; st.sub = ''; desenha(); m.body.scrollTop = 0; }; });
+    m.body.querySelectorAll('[data-s]').forEach(function(b){ b.onclick = function(){ st.sub = b.dataset.s; desenha(); m.body.scrollTop = 0; }; });
     var cq = m.body.querySelector('#cQ');
     cq.oninput = function(){ st.q = this.value; var pos = this.selectionStart; desenha(); var e = m.body.querySelector('#cQ'); e.focus(); e.setSelectionRange(pos,pos); };
-    m.body.querySelectorAll('[data-m]').forEach(function(b){ b.onclick = function(){ st.marca = b.dataset.m; st.q = ''; desenha(); m.body.scrollTop = 0; }; });
+    m.body.querySelectorAll('[data-m]').forEach(function(b){ b.onclick = function(){ st.marca = b.dataset.m; st.cat = ''; st.sub = ''; st.q = ''; desenha(); m.body.scrollTop = 0; }; });
     m.body.querySelector('[data-so]').onclick = function(){ st.so = !st.so; desenha(); };
     m.body.querySelectorAll('[data-add]').forEach(function(b){ b.onclick = function(){
       var mm = g.marcas.find(function(x){ return x.id === b.dataset.mm; });
