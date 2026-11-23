@@ -551,19 +551,21 @@ function abrirCatalogo(){
     if (q) lista = itens.map(function(x){ return cartao(x, q); }).join('');
     else { var atual = null; itens.forEach(function(x){ var c = x.i.cat || 'Outros'; if (c !== atual){ atual = c; lista += '<div class="cat-sec">' + esc(c) + '</div>'; } lista += cartao(x, q); }); }
     m.body.innerHTML = '<div class="cat-top"><input class="in" id="cQ" placeholder="Buscar código ou nome em todas as linhas" value="' + esc(st.q) + '">' +
-      (g.marcas.length > 1 ? '<div class="lb" style="margin:8px 0 4px">Linha de produtos</div><div class="chips wrap">' + g.marcas.map(function(mm){ return '<button class="chip" data-m="' + mm.id + '" aria-pressed="' + (!q && st.marca === mm.id) + '">' + esc(mm.nome) + ' <span class="ct">' + mm.itens.length + '</span></button>'; }).join('') + '</div>' : '') +
-      (q ? '' : '<div class="lb" style="margin:8px 0 4px">Categoria</div><div class="chips wrap cats"><button class="chip" data-c="" aria-pressed="' + (!st.cat) + '">Todas <span class="ct">' + mar.itens.length + '</span></button>' +
-        cats.map(function(c){ return '<button class="chip" data-c="' + esc(c.nome) + '" aria-pressed="' + (st.cat === c.nome) + '">' + esc(c.nome) + ' <span class="ct">' + c.n + '</span></button>'; }).join('') + '</div>' +
-        (subs.length > 1 ? '<div class="chips wrap" style="margin-top:6px"><button class="chip sub" data-s="" aria-pressed="' + (!st.sub) + '">Todos</button>' + subs.map(function(c){ return '<button class="chip sub" data-s="' + esc(c.nome) + '" aria-pressed="' + (st.sub === c.nome) + '">' + esc(c.nome) + ' <span class="ct">' + c.n + '</span></button>'; }).join('') + '</div>' : '')) +
-      '<div class="chips wrap" style="margin-top:6px"><button class="chip" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div>' +
+      '<div class="cat-sels">' +
+      (g.marcas.length > 1 ? '<div><label class="lb">Linha de produtos</label><select class="in" id="cM">' + g.marcas.map(function(mm){ return '<option value="' + mm.id + '"' + (st.marca === mm.id ? ' selected' : '') + '>' + esc(mm.nome) + ' (' + mm.itens.length + ')</option>'; }).join('') + '</select></div>' : '') +
+      (q ? '' : '<div><label class="lb">Categoria</label><select class="in" id="cC"><option value="">Todas (' + mar.itens.length + ')</option>' +
+        cats.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.cat === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></div>' +
+        (subs.length > 1 ? '<div><label class="lb">Subcategoria</label><select class="in" id="cS"><option value="">Todas</option>' + subs.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.sub === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></div>' : '')) +
+      '<div class="so"><button class="chip" data-so aria-pressed="' + st.so + '">Só disponíveis</button></div></div>' +
       '<div class="muted" style="font-size:12px;margin-top:6px">' + esc(q ? 'Resultado da busca em todas as linhas' : (mar.sub || '')) + ' · preços da política ' + esc(politicaNome(p.grupo, pid)) + '</div></div>' +
       lista + (itens.length ? '' : '<div class="empty">Nada encontrado.</div>') +
       (corte ? '<div class="muted" style="text-align:center;padding:10px">Mostrando os primeiros ' + LIM + '. Escolha uma categoria ou use a busca para ver os demais.</div>' : '');
-    m.body.querySelectorAll('[data-c]').forEach(function(b){ b.onclick = function(){ st.cat = b.dataset.c; st.sub = ''; desenha(); m.body.scrollTop = 0; }; });
-    m.body.querySelectorAll('[data-s]').forEach(function(b){ b.onclick = function(){ st.sub = b.dataset.s; desenha(); m.body.scrollTop = 0; }; });
+    var cC = m.body.querySelector('#cC'), cS = m.body.querySelector('#cS'), cM = m.body.querySelector('#cM');
+    if (cC) cC.onchange = function(){ st.cat = this.value; st.sub = ''; desenha(); m.body.scrollTop = 0; };
+    if (cS) cS.onchange = function(){ st.sub = this.value; desenha(); m.body.scrollTop = 0; };
+    if (cM) cM.onchange = function(){ st.marca = this.value; st.cat = ''; st.sub = ''; st.q = ''; desenha(); m.body.scrollTop = 0; };
     var cq = m.body.querySelector('#cQ');
     cq.oninput = function(){ st.q = this.value; var pos = this.selectionStart; desenha(); var e = m.body.querySelector('#cQ'); e.focus(); e.setSelectionRange(pos,pos); };
-    m.body.querySelectorAll('[data-m]').forEach(function(b){ b.onclick = function(){ st.marca = b.dataset.m; st.cat = ''; st.sub = ''; st.q = ''; desenha(); m.body.scrollTop = 0; }; });
     m.body.querySelector('[data-so]').onclick = function(){ st.so = !st.so; desenha(); };
     m.body.querySelectorAll('[data-add]').forEach(function(b){ b.onclick = function(){
       var mm = g.marcas.find(function(x){ return x.id === b.dataset.mm; });
