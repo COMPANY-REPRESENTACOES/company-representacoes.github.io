@@ -249,7 +249,7 @@ function telaLogin(msg){
     '<h1 style="text-align:center">Company Vendas</h1>' +
     (msg ? '<div class="note bad">' + esc(msg) + '</div>' : '') +
     '<form id="fLogin"><label class="lb">E-mail</label><input class="in" type="email" id="lEmail" autocomplete="username" required>' +
-    '<label class="lb">Senha</label><input class="in" type="password" id="lSenha" autocomplete="current-password" required>' +
+    '<label class="lb">Senha</label><span class="pwd"><input class="in" type="password" id="lSenha" autocomplete="current-password" required><button type="button" class="olho" tabindex="-1" aria-label="Segure para ver a senha" title="Segure para ver a senha"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>' +
     '<button class="btn pri" style="width:100%;margin-top:14px" id="lBtn">Entrar</button></form>' +
     '<div style="text-align:center;margin-top:12px"><a href="#" id="lEsqueci" style="color:#b07a12;font-weight:700;font-size:14px">Esqueci minha senha</a></div>' +
     '<p class="muted" style="font-size:12.5px;text-align:center;margin-top:14px">O primeiro acesso precisa de internet. Depois o app funciona offline.</p></div></div>';
@@ -291,8 +291,8 @@ function telaNovaSenha(msg){
   cartaoLogin('<h1 style="text-align:center">Criar senha nova</h1>' +
     (msg ? '<div class="note bad">' + esc(msg) + '</div>' : '') +
     (S.recup.email ? '<p class="muted" style="text-align:center;font-size:13.5px">' + esc(S.recup.email) + '</p>' : '') +
-    '<form id="fNova"><label class="lb">Nova senha</label><input class="in" type="password" id="nS1" autocomplete="new-password" minlength="6" required>' +
-    '<label class="lb">Repita a nova senha</label><input class="in" type="password" id="nS2" autocomplete="new-password" minlength="6" required>' +
+    '<form id="fNova"><label class="lb">Nova senha</label><span class="pwd"><input class="in" type="password" id="nS1" autocomplete="new-password" minlength="6" required><button type="button" class="olho" tabindex="-1" aria-label="Segure para ver a senha" title="Segure para ver a senha"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>' +
+    '<label class="lb">Repita a nova senha</label><span class="pwd"><input class="in" type="password" id="nS2" autocomplete="new-password" minlength="6" required><button type="button" class="olho" tabindex="-1" aria-label="Segure para ver a senha" title="Segure para ver a senha"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>' +
     '<p class="muted" style="font-size:12.5px">Mínimo de 6 caracteres.</p>' +
     '<button class="btn pri" style="width:100%;margin-top:8px" id="nBtn">Salvar senha nova e entrar</button></form>' +
     '<div style="text-align:center;margin-top:14px"><a href="#" id="nVolta" style="color:#b07a12;font-weight:700;font-size:14px">Cancelar</a></div>');
@@ -1455,6 +1455,18 @@ Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalog
   render(); sincronizar();
 });
 window.__cv = S;
+/* olho da senha: mostra enquanto o botão estiver pressionado */
+(function(){
+  function alvo(e){ var b = e.target.closest && e.target.closest('.pwd .olho'); return b ? b.parentNode.querySelector('input') : null; }
+  function mostra(inp, v){ if (inp){ inp.type = v ? 'text' : 'password'; inp.parentNode.classList.toggle('vendo', v); } }
+  var atual = null;
+  function solta(){ if (atual){ mostra(atual, false); atual = null; } }
+  document.addEventListener('pointerdown', function(e){ var i = alvo(e); if (!i) return; e.preventDefault(); atual = i; mostra(i, true); }, true);
+  ['pointerup','pointercancel','blur'].forEach(function(ev){ (ev === 'blur' ? window : document).addEventListener(ev, solta, true); });
+  document.addEventListener('pointerout', function(e){ if (atual && alvo(e)) solta(); }, true);
+  document.addEventListener('contextmenu', function(e){ if (alvo(e)) e.preventDefault(); }, true);
+  document.addEventListener('click', function(e){ if (alvo(e)) e.preventDefault(); }, true);
+})();
 })();
 
 /* ----- foto ampliada: toque na foto do produto (catálogo ou pedido) abre em tamanho grande; X fecha ----- */
