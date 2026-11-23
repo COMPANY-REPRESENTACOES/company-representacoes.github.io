@@ -310,7 +310,7 @@ function topo(){
 function casca(conteudo, acoes){
   var r = rota().nome;
   var nAl = emailsAlerta().length;
-  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['representadas','Representadas'],['transportadoras','Transportadoras'],['desempenho','Desempenho'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
+  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['produtos','Produtos'],['representadas','Representadas'],['transportadoras','Transportadoras'],['desempenho','Desempenho'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
@@ -1286,6 +1286,69 @@ function telaEmail(p){
   el('mEnvNovo').onclick = function(){ enviar(true); };
 }
 
+/* ---------- produtos: consulta rápida de preços ---------- */
+function telaProdutos(){
+  if (!S.cat || !S.cat.grupos || !S.cat.grupos.length){ casca('<h1>Produtos</h1><div class="card empty">O catálogo ainda não foi carregado neste aparelho. Conecte à internet e abra de novo.</div>'); return; }
+  var grs = S.cat.grupos.slice().sort(function(a, b){ return a.nome.localeCompare(b.nome, 'pt'); });
+  var st = S.fPr = S.fPr || { grupo: grs[0].id, pol: '', marca: '', cat: '', sub: '', q: '', so: false };
+  var g = grupo(st.grupo) || grs[0]; st.grupo = g.id;
+  if (!g.politicas.some(function(x){ return x.id === st.pol; })) st.pol = g.politicas[0].id;
+  if (!g.marcas.some(function(x){ return x.id === st.marca; })) st.marca = g.marcas[0].id;
+  var pid = st.pol, mar = g.marcas.find(function(x){ return x.id === st.marca; });
+  var mainCat = function(i){ return String(i.cat || 'Outros').split(' · ')[0]; };
+  var subCat = function(i){ var p = String(i.cat || '').split(' · '); return p.length > 1 ? p.slice(1).join(' · ') : ''; };
+  var catsDe = function(m, fn, filtro){ var o = [], c = {}; m.itens.forEach(function(i){ if (filtro && !filtro(i)) return; var k = fn(i); if (!k) return; if (!(k in c)){ c[k] = 0; o.push(k); } c[k]++; }); return o.map(function(k){ return { nome: k, n: c[k] }; }); };
+  var isTag = st.cat.indexOf('#tag:') === 0, tagSel = isTag ? st.cat.slice(5) : '';
+  var q = st.q.toLowerCase().trim(), cats = catsDe(mar, mainCat), tags = catsDe(mar, function(i){ return i.tag || ''; }), subs = st.cat && !isTag ? catsDe(mar, subCat, function(i){ return mainCat(i) === st.cat; }) : [];
+  var pool = q ? g.marcas.reduce(function(a, mm){ return a.concat(mm.itens.map(function(i){ return { i: i, m: mm }; })); }, []) : mar.itens.map(function(i){ return { i: i, m: mar }; });
+  var itens = pool.filter(function(x){
+    if (st.so && !x.i.av[pid]) return false;
+    if (!q && isTag && x.i.tag !== tagSel) return false;
+    if (!q && st.cat && !isTag && mainCat(x.i) !== st.cat) return false;
+    if (!q && st.sub && subCat(x.i) !== st.sub) return false;
+    return !q || (x.i.cod + ' ' + x.i.desc + ' ' + x.i.cat).toLowerCase().indexOf(q) > -1;
+  });
+  var total = itens.length, LIM = 300; itens = itens.slice(0, LIM);
+  var card = function(x){
+    var it = x.i, pr = it.p[pid], av = it.av[pid], tiers = it.tiers && it.tiers[pid], o = it.o && it.o[pid];
+    var desc = o && pr ? Math.round((1 - pr/o) * 1000)/10 : 0;
+    return '<div class="card pr-card' + (av ? '' : ' unav') + '"><div class="pr-img"><img src="' + esc(it.img || 'company.png') + '" loading="lazy" alt="" onerror="this.src=\'company.png\'">' + (av ? '' : '<span class="pr-ind">INDISPONÍVEL</span>') + '</div>' +
+      '<div class="pr-b"><div class="pr-cod"><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + '</div>' +
+      '<div class="pr-desc">' + esc(it.desc) + '</div>' + (q && g.marcas.length > 1 ? '<div class="muted" style="font-size:11.5px">' + esc(x.m.nome) + ' · ' + esc(mainCat(it)) + '</div>' : '') +
+      (tiers ? '<div class="pr-tiers">' + tiers.map(function(t){ return '<span>' + esc(t.label) + ' <b>' + fmt(t.unit) + '</b></span>'; }).join('') + '</div>'
+        : '<div class="pr-val">' + (pr == null ? '<span class="muted">Sob consulta</span>' : fmt(pr)) + (o && o > pr ? ' <s>' + fmt(o) + '</s>' : '') + (desc > 0 ? ' <em>−' + String(desc).replace('.', ',') + '%</em>' : '') + '</div>') +
+      (it.cores ? '<div class="muted" style="font-size:11.5px">Cores: ' + esc(it.cores.join(', ')) + '</div>' : '') +
+      '</div></div>';
+  };
+  var lista = '';
+  if (q) lista = '<div class="pr-grid">' + itens.map(card).join('') + '</div>';
+  else { var atual = null, buf = ''; itens.forEach(function(x){ var c = x.i.cat || 'Outros'; if (c !== atual){ if (buf) lista += '<div class="pr-grid">' + buf + '</div>'; buf = ''; atual = c; lista += '<div class="cat-sec">' + esc(c) + '</div>'; } buf += card(x); }); if (buf) lista += '<div class="pr-grid">' + buf + '</div>'; }
+  var lg = logoRep(g.id);
+  var html = '<div class="row" style="align-items:center;gap:12px">' + (lg ? '<img class="pr-logo" src="' + esc(lg.url) + '" alt="">' : '') + '<div class="grow"><h1 style="margin:0">Produtos</h1><div class="muted" style="font-size:13px">Consulta rápida de preços · ' + esc(g.nome) + ' · política ' + esc(politicaNome(g.id, pid)) + '</div></div></div>' +
+    '<div class="card pr-fil"><div class="pr-fl">' +
+      '<label><span class="lb">Representada</span><select class="in" id="pG">' + grs.map(function(x){ return '<option value="' + x.id + '"' + (x.id === g.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select></label>' +
+      (g.politicas.length > 1 ? '<label><span class="lb">Política de preço</span><select class="in" id="pP">' + g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (x.id === pid ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select></label>' : '') +
+      (g.marcas.length > 1 ? '<label><span class="lb">Linha de produtos</span><select class="in" id="pM">' + g.marcas.map(function(mm){ return '<option value="' + mm.id + '"' + (mm.id === mar.id ? ' selected' : '') + '>' + esc(mm.nome) + ' (' + mm.itens.length + ')</option>'; }).join('') + '</select></label>' : '') +
+      (q ? '' : '<label><span class="lb">Categoria</span><select class="in" id="pC"><option value="">Todas (' + mar.itens.length + ')</option>' +
+        tags.map(function(t){ var v = '#tag:' + t.nome; return '<option value="' + esc(v) + '"' + (st.cat === v ? ' selected' : '') + '>★ ' + esc(t.nome) + ' (' + t.n + ')</option>'; }).join('') +
+        cats.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.cat === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></label>' +
+        (subs.length > 1 ? '<label><span class="lb">Subcategoria</span><select class="in" id="pS"><option value="">Todas</option>' + subs.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.sub === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select></label>' : '')) +
+    '</div><div class="pr-fl2"><input class="in" id="pQ" type="search" placeholder="🔍 Buscar código ou nome' + (g.marcas.length > 1 ? ' em todas as linhas' : '') + '" value="' + esc(st.q) + '">' +
+      '<div class="chips"><button class="chip" data-pso="0" aria-pressed="' + !st.so + '">Todos</button><button class="chip" data-pso="1" aria-pressed="' + st.so + '">Só disponíveis</button></div></div></div>' +
+    '<div class="muted" style="font-size:12.5px;margin:10px 2px">' + total + ' produto' + (total === 1 ? '' : 's') + (total > LIM ? ' · mostrando os primeiros ' + LIM + ' (use a categoria ou a busca)' : '') + '</div>' +
+    (itens.length ? lista : '<div class="card empty">Nada encontrado.</div>');
+  casca(html);
+  var re = function(){ telaProdutos(); };
+  document.getElementById('pG').onchange = function(){ st.grupo = this.value; st.pol = ''; st.marca = ''; st.cat = ''; st.sub = ''; st.q = ''; re(); };
+  var e;
+  if ((e = document.getElementById('pP'))) e.onchange = function(){ st.pol = this.value; re(); };
+  if ((e = document.getElementById('pM'))) e.onchange = function(){ st.marca = this.value; st.cat = ''; st.sub = ''; re(); };
+  if ((e = document.getElementById('pC'))) e.onchange = function(){ st.cat = this.value; st.sub = ''; re(); };
+  if ((e = document.getElementById('pS'))) e.onchange = function(){ st.sub = this.value; re(); };
+  document.getElementById('pQ').oninput = function(){ st.q = this.value; var pos = this.selectionStart; re(); var x = document.getElementById('pQ'); x.focus(); x.setSelectionRange(pos, pos); };
+  $app.querySelectorAll('[data-pso]').forEach(function(b){ b.onclick = function(){ st.so = b.dataset.pso === '1'; re(); }; });
+}
+
 /* ---------- transportadoras ---------- */
 var UF_NOMES = { AC:'Acre', AL:'Alagoas', AP:'Amapá', AM:'Amazonas', BA:'Bahia', CE:'Ceará', DF:'Distrito Federal', ES:'Espírito Santo', GO:'Goiás', MA:'Maranhão', MT:'Mato Grosso', MS:'Mato Grosso do Sul', MG:'Minas Gerais', PA:'Pará', PB:'Paraíba', PR:'Paraná', PE:'Pernambuco', PI:'Piauí', RJ:'Rio de Janeiro', RN:'Rio Grande do Norte', RS:'Rio Grande do Sul', RO:'Rondônia', RR:'Roraima', SC:'Santa Catarina', SP:'São Paulo', SE:'Sergipe', TO:'Tocantins' };
 function trDatalist(){ return '<datalist id="trL">' + (S.transps || []).map(function(t){ return '<option value="' + esc(t.nome) + '">' + esc([t.telefone, [t.cidade, t.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ')) + '</option>'; }).join('') + '</datalist>'; }
@@ -1800,6 +1863,7 @@ function render(){
   if (r.nome === 'representada') return telaRepresentada(r.arg);
   if (r.nome === 'emails') return telaEmails();
   if (r.nome === 'desempenho') return telaDesempenho();
+  if (r.nome === 'produtos') return telaProdutos();
   if (r.nome === 'transportadoras') return telaTransportadoras(r.arg);
   if (r.nome === 'mais') return telaMais();
   return telaPedidos();
@@ -1853,12 +1917,12 @@ function abrirZoom(src, legenda){
 }
 function fecharZoom(){ var z = document.getElementById('zoomFoto'); if (z) z.remove(); }
 document.addEventListener('click', function(e){
-  var im = e.target.closest && e.target.closest('.cat-it > img, .it > img');
+  var im = e.target.closest && e.target.closest('.cat-it > img, .it > img, .pr-img > img');
   if (!im) return;
   var src = im.currentSrc || im.src;
   if (!src || /company\.png$/.test(src)) return; // sem foto do produto
   e.preventDefault(); e.stopPropagation();
-  var box = im.parentNode, cod = box.querySelector('b, .cod'), ds = box.querySelector('.ds, div.muted');
+  var box = im.closest('.pr-card') || im.parentNode, cod = box.querySelector('b, .cod'), ds = box.querySelector('.pr-desc, .ds, div.muted');
   abrirZoom(src, [cod && cod.textContent, ds && ds.textContent].filter(Boolean).join(' · '));
 }, true);
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('zoomFoto')){ e.stopPropagation(); fecharZoom(); } }, true);
