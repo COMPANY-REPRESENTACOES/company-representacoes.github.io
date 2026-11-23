@@ -1122,16 +1122,6 @@ function montarPdf(p, modo){
   doc.text(M, y + 26, 'Política ' + politicaNome(p.grupo, p.politica) + ' · Total em preço de tabela ' + fmt(somaTab) + ' · Descontos ' + fmt(Math.max(0, somaTab - tot)), { size: 8, color: MUTED });
   if (eAvista(p)){ doc.text(M, y + 40, 'Preços já com ' + avistaDe(p).desc + '% de desconto à vista (sem o desconto: ' + fmt(totBruto(p)) + ')', { size: 9, bold: true, color: RED }); y += 8; }
   y += 56;
-  var pcs = parcelasDe(p);
-  if (pcs.length){
-    if (y + 20 + Math.ceil(pcs.length/4)*16 > BOTTOM){ doc.addPage(); y = M; }
-    doc.text(M, y, 'PARCELAS (' + p.prazo + ')', { size: 7.5, bold: true, color: RED }); y += 6;
-    var pw = CW / 4, lh = 16, nl = Math.ceil(pcs.length/4);
-    doc.rect(M, y, CW, nl*lh + 8, null, LINE, 0.8);
-    pcs.forEach(function(x, i){ var cx = M + (i % 4) * pw + 10, cy = y + 15 + Math.floor(i/4) * lh;
-      doc.text(cx, cy, x.n + 'ª · ' + x.dias + ' dias:', { size: 8.5, color: MUTED }); doc.text(cx + pw - 20, cy, fmt(x.valor), { size: 9, bold: true, align: 'right' }); });
-    y += nl*lh + 24;
-  }
   if (obs.length){ doc.text(M, y, 'OBSERVAÇÕES', { size: 7.5, bold: true, color: RED }); y += 6; var oh = obs.length*12 + 12; doc.rect(M, y, CW, oh, null, LINE, 0.8); obs.forEach(function(l,i){ doc.text(M+10, y+15+i*12, l, { size: 9 }); }); y += oh + 16; }
   y = Math.max(y + 30, Math.min(BOTTOM - 20, y + 40)); var sw = (CW - 40)/2;
   doc.line(M, y, M+sw, y, '#9a9892', 0.7); doc.line(M+sw+40, y, M+CW, y, '#9a9892', 0.7);
