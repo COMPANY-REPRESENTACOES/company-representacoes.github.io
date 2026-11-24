@@ -1381,6 +1381,7 @@
 
   var TIERS_DESC = [[3000,4],[6000,6],[9000,8]];
   var MIN_ORDER = 1000, MIN_BOLETO = 700, PCT = 0;
+  var FRETE_ABAIXO = 3500, FRETE_VALOR = 130, FRETE_TXT = 'Redespacho até SP capital (pedido líquido abaixo de R$ 3.500,00)';
   function r2(v){ return Math.round(v*100)/100; }
   function tierOf(it, label){ return (it && it.tiers || []).filter(function(t){ return t.label === label; })[0]; }
   function tabGross(){
@@ -1407,7 +1408,8 @@
     var gross = 0, total = 0, promoSub = 0;
     entries.forEach(function(e){ gross += e.qty*e.tab; total += e.qty*e.unit; if (e.promo) promoSub += e.qty*e.tab; });
     total = r2(total);
-    return { gross: gross, promoSub: promoSub, pct: PCT, disc: r2(gross-total), total: total, next: nextFor(gross) };
+    var frete = (total > 0 && total < FRETE_ABAIXO) ? FRETE_VALOR : 0;
+    return { gross: gross, promoSub: promoSub, pct: PCT, disc: r2(gross-total), liq: total, frete: frete, total: r2(total + frete), next: nextFor(gross) };
   }
   function meterHTML(){
     var g = tabGross(), nx = nextFor(g), w = Math.min(100, g/9000*100);
@@ -1454,7 +1456,8 @@
     if (!T){ el.innerHTML=''; return; }
     var h = '<div class="dl"><span>Subtotal (preço de tabela)</span><b>'+fmt(T.gross)+'</b></div>';
     if (T.pct) h += '<div class="dl ok"><span>Desconto progressivo '+T.pct+'%'+(T.promoSub?' <small>(exceto promoções)</small>':'')+'</span><b>− '+fmt(T.disc)+'</b></div>';
-    if (T.total < MIN_ORDER) h += '<div class="dl warn">Pedido mínimo de <b>'+fmt(MIN_ORDER)+'</b> · faltam <b>'+fmt(MIN_ORDER-T.total)+'</b></div>';
+    if (T.frete) h += '<div class="dl"><span>🚚 '+FRETE_TXT+'</span><b>+ '+fmt(T.frete)+'</b></div><div class="dl hint">Faltam <b>'+fmt(FRETE_ABAIXO-T.liq+0.01)+'</b> para não pagar o redespacho.</div>';
+    if (T.liq < MIN_ORDER) h += '<div class="dl warn">Pedido mínimo de <b>'+fmt(MIN_ORDER)+'</b> · faltam <b>'+fmt(MIN_ORDER-T.liq)+'</b></div>';
     else { var nb = Math.floor(T.total/MIN_BOLETO); h += '<div class="dl info">Boleto mínimo de '+fmt(MIN_BOLETO)+' · este pedido permite até <b>'+nb+' boleto'+(nb>1?'s':'')+'</b></div>'; }
     el.innerHTML = h;
   }
@@ -1532,6 +1535,7 @@
     lines.push('');
     lines.push('Subtotal: ' + fmt(T.gross));
     if (T.pct) lines.push('Desconto progressivo ' + T.pct + '%' + (T.promoSub ? ' (exceto promoções)' : '') + ': - ' + fmt(T.disc));
+    if (T.frete) lines.push(FRETE_TXT + ': + ' + fmt(T.frete));
     lines.push(b + 'Total: ' + fmt(total) + b);
     if (carrier) lines.push('Transportadora: ' + carrier);
     if (obs) { lines.push(''); lines.push('Obs: ' + obs); }
@@ -1654,7 +1658,7 @@
 
   document.getElementById('sendWhats').addEventListener('click', function(){
     var btn = this;
-    if (calcTotals(cartEntries()).total < MIN_ORDER){ alert('Pedido mínimo de ' + fmt(MIN_ORDER) + '. Adicione mais itens para enviar o pedido.'); return; }
+    if (calcTotals(cartEntries()).liq < MIN_ORDER){ alert('Pedido mínimo de ' + fmt(MIN_ORDER) + '. Adicione mais itens para enviar o pedido.'); return; }
     var p;
     try { p = makeOrderPdf(false); }
     catch(err){ console.error(err); alert('Não foi possível gerar o PDF. Tente novamente.'); return; }
@@ -2063,7 +2067,7 @@
     doc.text(W - M - tw + 10, y + 14, o.entries.length + (o.entries.length === 1 ? ' item' : ' itens') + ' · ' + totalQty + ' peças', { size: 8, color: MUTED });
     doc.text(W - M - tw + 10, y + 31, 'TOTAL DO PEDIDO', { size: 9, bold: true });
     doc.text(W - M - 10, y + 31, fmt(o.total), { size: 14, bold: true, color: RED, align: 'right' });
-    doc.text(M, y + 14, 'Subtotal ' + fmt(o.T.gross) + (o.T.pct ? '  ·  Desconto progressivo ' + o.T.pct + '%: - ' + fmt(o.T.disc) : ''), { size: 8.5, bold: true });
+    doc.text(M, y + 14, 'Subtotal ' + fmt(o.T.gross) + (o.T.pct ? '  ·  Desconto progressivo ' + o.T.pct + '%: - ' + fmt(o.T.disc) : '') + (o.T.frete ? '  ·  Redespacho até SP capital: + ' + fmt(o.T.frete) : ''), { size: 8.5, bold: true });
     doc.text(M, y + 28, 'Preços catálogo TR Music/Ronsani mai/2026' + (o.T.promoSub ? ' · promoções sem desconto progressivo' : ''), { size: 7.5, color: MUTED });
     y += 56;
 
