@@ -590,7 +590,7 @@ function excluirPedido(id){
   if (soLocal) return limpaLocal();
   if (!navigator.onLine) return Promise.reject(new Error('Sem internet: para excluir um pedido já enviado ao sistema, conecte-se à internet.'));
   return api('pedido_historico?pedido_id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=minimal' }).catch(function(e){ if (e && e.auth) throw e; })
-    .then(function(){ return api('pedidos?id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=representation' }); })
+    .then(function(){ return api('pedidos?id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=representation' }).catch(function(e){ if (/42501|permission denied/i.test(String(e && e.message))) throw new Error('Pedido NÃO excluído: o banco ainda não tem a permissão de exclusão (rodar o código de permissão no Supabase).'); throw e; }); })
     .then(function(r){
       if (!r || !r.length){ var e = new Error('O banco não permitiu excluir este pedido (falta a permissão de exclusão no banco). Fale com o administrador.'); throw e; }
       return limpaLocal();
