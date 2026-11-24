@@ -202,6 +202,21 @@ function precoInfo(p, it){
   if (a && a.it.tag === 'Oferta' && desc.indexOf('+') < 0) desc = 'Oferta ' + desc;
   return { tab: tab, desc: desc };
 }
+/* preço de tabela (cheio) de um item do catálogo na política escolhida */
+var FATOR_TAB = { michael: 0.645 }; // 14% + 25%
+function tabelaDe(gid, pid, it){
+  var pr = it.p && it.p[pid], o = it.o && it.o[pid];
+  if (gid === 'equipo'){ var d = /^18/.test(pid) ? 18 : 15, b = o || pr; return b != null ? r2(b / (1 - d/100)) : null; }
+  if (o) return r2(o);
+  if (pr != null && FATOR_TAB[gid] && !(it.tag && /promo|oferta/i.test(it.tag))) return r2(pr / FATOR_TAB[gid]);
+  return pr != null ? r2(pr) : null;
+}
+function precoComTabela(gid, pid, it){
+  var pr = it.p && it.p[pid], tab = tabelaDe(gid, pid, it);
+  if (pr == null) return '<span class="muted">Sob consulta</span>';
+  var d = tab && tab > pr + 0.004 ? Math.round((1 - pr/tab) * 1000)/10 : 0;
+  return fmt(pr) + (d > 0 ? ' <s title="Preço de tabela">' + fmt(tab) + '</s> <em>−' + String(d).replace('.', ',') + '%</em>' : ' <small class="pt-tab">preço de tabela</small>');
+}
 function imgDe(gid, cod){ var a = acharItem(gid, cod); return a && a.it.img ? a.it.img : 'company.png'; }
 
 /* ---------- sincronização ---------- */
@@ -627,7 +642,7 @@ function abrirCatalogo(){
     return '<div class="cat-it' + (av ? '' : ' unav') + '"><img src="' + esc(it.img || 'company.png') + '" loading="lazy" alt="" onerror="this.src=\'company.png\'"><div>' +
       '<div><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + (av ? '' : '<span class="tag ind">INDISPONÍVEL</span>') + (q ? ' <span class="muted" style="font-size:12px">· ' + esc(x.m.nome) + '</span>' : '') + '</div>' +
       '<div class="muted" style="font-size:13px">' + esc(it.desc) + '</div>' +
-      '<div class="pr">' + (pr == null ? 'Sob consulta' : fmt(pr)) + (it.o && it.o[pid] ? ' <s class="muted" style="font-weight:500">' + fmt(it.o[pid]) + '</s>' : '') + '</div>' +
+      '<div class="pr pr-val">' + precoComTabela(g.id, pid, it) + '</div>' +
       '<div class="opts" data-k="' + esc(it.k) + '" data-om="' + x.m.id + '">' + opts + '</div></div></div>';
   }
   function desenha(){
@@ -1316,7 +1331,7 @@ function telaProdutos(){
       '<div class="pr-b"><div class="pr-cod"><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + '</div>' +
       '<div class="pr-desc">' + esc(it.desc) + '</div>' + (q && g.marcas.length > 1 ? '<div class="muted" style="font-size:11.5px">' + esc(x.m.nome) + ' · ' + esc(mainCat(it)) + '</div>' : '') +
       (tiers ? '<div class="pr-tiers">' + tiers.map(function(t){ return '<span>' + esc(t.label) + ' <b>' + fmt(t.unit) + '</b></span>'; }).join('') + '</div>'
-        : '<div class="pr-val">' + (pr == null ? '<span class="muted">Sob consulta</span>' : fmt(pr)) + (o && o > pr ? ' <s>' + fmt(o) + '</s>' : '') + (desc > 0 ? ' <em>−' + String(desc).replace('.', ',') + '%</em>' : '') + '</div>') +
+        : '<div class="pr-val">' + precoComTabela(g.id, pid, it) + '</div>') +
       (it.cores ? '<div class="muted" style="font-size:11.5px">Cores: ' + esc(it.cores.join(', ')) + '</div>' : '') +
       '</div></div>';
   };
