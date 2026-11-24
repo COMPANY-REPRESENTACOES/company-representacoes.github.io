@@ -1664,6 +1664,8 @@ var DIAS_ALERTA = 2;
 function emailsDoUsuario(){ var l = S.emails || []; return souAdmin() ? l : l.filter(function(e){ return !e.vendedor_codigo || e.vendedor_codigo === (S.perfil && S.perfil.codigo); }); }
 function emAlerta(e){ return e.status_envio !== 'erro' && !e.lido && !e.conferido && (Date.now() - new Date(e.enviado_em).getTime()) > DIAS_ALERTA * 864e5; }
 function emailsAlerta(){ return emailsDoUsuario().filter(emAlerta); }
+function dataHoraBR(iso){ if(!iso) return ''; var d = new Date(iso); return p2(d.getDate())+'/'+p2(d.getMonth()+1)+'/'+d.getFullYear()+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+function enviadoPorTxt(t){ t = String(t || '').toUpperCase(); var m = t.match(/^(.*?)\s*\((.*)\)\s*$/); return m ? m[1].trim() + ' ( ' + m[2].trim() + ' )' : t; }
 function telaEmails(){
   S.fEm = S.fEm || 'todos';
   var todos = emailsDoUsuario(), q = (S.fEmQ || '').toLowerCase();
@@ -1674,6 +1676,8 @@ function telaEmails(){
     if (S.fEm === 'erro' && e.status_envio !== 'erro') return false;
     return !q || [e.destinatario, e.assunto, e.pedido_numero, e.enviado_por].join(' ').toLowerCase().indexOf(q) > -1;
   });
+  lista.sort(function(x,y){ var d = new Date(x.enviado_em) - new Date(y.enviado_em); return S.emAsc ? d : -d; });
+  S.emSel = S.emSel || {};
   var nAl = todos.filter(emAlerta).length;
   var aviso = S.emailsErr === 'tabela' ? '<div class="note warn">O registro de e-mails ainda não está ligado no banco. Assim que terminarmos a configuração do envio direto, os e-mails aparecem aqui.</div>'
     : S.emailsErr ? '<div class="note bad">Não foi possível carregar os e-mails: ' + esc(S.emailsErr) + '</div>' : '';
@@ -1681,16 +1685,28 @@ function telaEmails(){
     (nAl ? '<div class="note bad" style="margin-top:10px">⚠ <b>' + nAl + ' e-mail' + (nAl > 1 ? 's' : '') + ' sem leitura há mais de ' + DIAS_ALERTA + ' dias.</b> Confira com o destinatário e, depois de resolver, toque em “Conferido”.</div>' : '') +
     '<input class="in" id="emQ" style="margin-top:10px" placeholder="Buscar por destinatário, assunto ou nº do pedido" value="' + esc(S.fEmQ || '') + '">' +
     '<div class="chips" style="margin-top:8px">' + [['todos','Todos'],['alerta','⚠ Alertas'],['nao','Não lidos'],['lido','Lidos'],['erro','Com erro']].map(function(o){ return '<button class="chip" data-fem="' + o[0] + '" aria-pressed="' + (S.fEm === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
-    '<div class="card" style="margin-top:10px;overflow:auto">' + (lista.length ? '<table class="tb em-tb"><thead><tr><th>Data/hora envio</th><th>Destinatário</th><th>Assunto</th><th>Lido/Recebido</th><th>Data/hora leitura</th><th>Enviado por</th><th></th></tr></thead><tbody>' +
+    (S.emSel && Object.keys(S.emSel).length ? '<div class="row" style="margin-top:10px;gap:8px"><span class="muted">' + Object.keys(S.emSel).length + ' selecionado(s)</span><button class="btn sm" id="emConfSel">✓ Marcar como conferido</button><button class="btn sm ghost" id="emLimpa">Limpar seleção</button></div>' : '') +
+    '<div class="card" style="margin-top:10px;overflow:auto;padding:0">' + (lista.length ? '<table class="tb em-tb"><thead><tr><th class="em-ck"><input type="checkbox" id="emTodos"' + (lista.every(function(e){ return S.emSel && S.emSel[e.id]; }) ? ' checked' : '') + '></th><th class="em-ord" id="emOrd">' + (S.emAsc ? '↑' : '↓') + ' Data/Hora Envio</th><th>Destinatário</th><th>Assunto</th><th class="em-c">Lido/Recebido</th><th>Data/Hora Recebimento</th><th>Enviado por</th><th></th></tr></thead><tbody>' +
       lista.map(function(e){
-        var al = emAlerta(e), st = e.status_envio === 'erro' ? '<span class="badge st-cancelado" title="' + esc(e.erro || '') + '">Erro no envio</span>' : e.lido ? '<span class="badge em-sim">✓ Lido</span>' + (e.aberturas > 1 ? ' <span class="muted" style="font-size:12px">' + e.aberturas + '×</span>' : '') : al ? '<span class="badge em-al">⚠ Não lido · ' + Math.floor((Date.now() - new Date(e.enviado_em).getTime())/864e5) + ' dias</span>' : '<span class="badge em-nao">Enviado · não lido</span>';
-        return '<tr class="' + (al ? 'em-alerta' : '') + '"><td>' + dataBR(e.enviado_em) + '</td><td>' + esc(e.destinatario) + '</td><td>' + (e.pedido_id && S.pedidos[e.pedido_id] ? '<a href="#pedido/' + esc(e.pedido_id) + '">' + esc(e.assunto) + '</a>' : esc(e.assunto)) + '</td><td>' + st + '</td><td>' + (e.lido_em ? dataBR(e.lido_em) : '') + '</td><td>' + esc(e.enviado_por || '') + '</td>' +
+        var al = emAlerta(e), dias = Math.floor((Date.now() - new Date(e.enviado_em).getTime())/864e5);
+        var st = e.status_envio === 'erro' ? '<span class="em-err" title="' + esc(e.erro || '') + '">Erro no envio</span>' : e.lido ? '<span class="em-s">Sim</span>' : al ? '<span class="em-n em-n-al" title="Sem leitura há ' + dias + ' dias">Não ⚠</span>' : '<span class="em-n">Não</span>';
+        return '<tr class="' + (al ? 'em-alerta' : '') + '"><td class="em-ck"><input type="checkbox" data-sel="' + esc(e.id) + '"' + (S.emSel && S.emSel[e.id] ? ' checked' : '') + '></td><td>' + dataHoraBR(e.enviado_em) + '</td><td>' + esc(e.destinatario) + '</td><td>' + (e.pedido_id && S.pedidos[e.pedido_id] ? '<a href="#pedido/' + esc(e.pedido_id) + '">' + esc(e.assunto) + '</a>' : esc(e.assunto)) + '</td><td class="em-c">' + st + '</td><td>' + (e.lido_em ? dataHoraBR(e.lido_em) : '') + '</td><td>' + esc(enviadoPorTxt(e.enviado_por)) + '</td>' +
           '<td>' + (al ? '<button class="btn sm" data-conf="' + esc(e.id) + '">✓ Conferido</button>' : e.conferido && !e.lido ? '<span class="muted" style="font-size:12px">conferido</span>' : '') + '</td></tr>';
       }).join('') + '</tbody></table>' : '<div class="empty">' + (todos.length ? 'Nenhum e-mail com esse filtro.' : 'Nenhum e-mail enviado pelo programa ainda.') + '</div>') + '</div>' +
-    '<p class="muted" style="font-size:12px;margin-top:10px">“Lido” é marcado quando o destinatário abre o e-mail com as imagens carregadas. Alguns programas de e-mail bloqueiam imagens (aí fica “Não” mesmo lido) e o Mail do iPhone pode marcar como lido sozinho.</p>';
+    '<p class="muted" style="font-size:12px;margin-top:10px">“Sim” aparece quando o destinatário abre o e-mail com as imagens carregadas (os acessos automáticos do servidor de e-mail na entrega não contam). Se o e-mail dele bloquear imagens, pode ficar “Não” mesmo lido. Depois de ' + DIAS_ALERTA + ' dias sem leitura aparece o alerta ⚠.</p>';
   casca(html);
   document.getElementById('emAtu').onclick = function(){ sincronizar(true); };
   document.getElementById('emQ').oninput = function(){ S.fEmQ = this.value; var pos = this.selectionStart; telaEmails(); var e = document.getElementById('emQ'); e.focus(); e.setSelectionRange(pos,pos); };
+  var ord = document.getElementById('emOrd'); if (ord) ord.onclick = function(){ S.emAsc = !S.emAsc; telaEmails(); };
+  var tds = document.getElementById('emTodos'); if (tds) tds.onchange = function(){ lista.forEach(function(e){ if (tds.checked) S.emSel[e.id] = 1; else delete S.emSel[e.id]; }); telaEmails(); };
+  $app.querySelectorAll('[data-sel]').forEach(function(c){ c.onchange = function(){ if (c.checked) S.emSel[c.dataset.sel] = 1; else delete S.emSel[c.dataset.sel]; telaEmails(); }; });
+  var lp = document.getElementById('emLimpa'); if (lp) lp.onclick = function(){ S.emSel = {}; telaEmails(); };
+  var cs = document.getElementById('emConfSel'); if (cs) cs.onclick = function(){
+    var ids = Object.keys(S.emSel);
+    api('emails_enviados?id=in.(' + ids.join(',') + ')', { method: 'PATCH', body: { conferido: true }, prefer: 'return=minimal' }).then(function(){
+      (S.emails || []).forEach(function(x){ if (S.emSel[x.id]) x.conferido = true; }); S.emSel = {}; kvSet('emails', S.emails); telaEmails(); toast('Marcados como conferidos.');
+    }, function(err){ toast('Não foi possível marcar: ' + String(err.message).slice(0,120)); });
+  };
   $app.querySelectorAll('[data-fem]').forEach(function(b){ b.onclick = function(){ S.fEm = b.dataset.fem; telaEmails(); }; });
   $app.querySelectorAll('[data-conf]').forEach(function(b){ b.onclick = function(){
     var id = b.dataset.conf;
