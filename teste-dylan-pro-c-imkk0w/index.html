@@ -1440,6 +1440,12 @@
     render();
   });
 
+  /* PADRÃO: preço de tabela riscado em todos os produtos */
+  function pxTabX(it){
+    var t = it.orig || 0;
+    try { if (typeof pxInfo === 'function'){ var i = pxInfo({ it: it, unit: it.price, qty: 1, cod: it.cod }); if (i && i.tab) t = i.tab; } } catch(e){}
+    return (t && it.price && t > it.price + 0.004) ? Math.round(t * 100) / 100 : 0;
+  }
   function pctOff(orig, price){
     if (!orig) return 0;
     return Math.round((1 - price/orig)*100);
@@ -1540,7 +1546,7 @@
   function itemCardHTML(it){
     if (it.bfpack) return bfPackCardHTML(it);
     var qty = getCartQty(it.n);
-    var off = pctOff(it.orig, it.price);
+    var tabX = pxTabX(it), off = pctOff(tabX, it.price);
     var body;
     if (!it.avail){
       body = '<div class="unavail-note">Sem estoque no momento</div>';
@@ -1574,7 +1580,7 @@
             '<span class="price">'+fmt(it.price)+
               (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '')+
             '</span>'+
-            (it.orig ? '<span class="orig-price">'+fmt(it.orig)+'</span>' : '')+
+            (tabX ? '<span class="orig-price">'+fmt(tabX)+'</span>' : '')+
           '</div>'
         )+
         body+
@@ -2605,10 +2611,10 @@
       if (pdPriceRow) pdPriceRow.style.display = 'none';
     } else {
       if (pdPriceRow) pdPriceRow.style.display = '';
-      var off = pctOff(it.orig, it.price);
+      var tabX = pxTabX(it), off = pctOff(tabX, it.price);
       pdPrice.innerHTML = fmt(it.price) + (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '');
-      pdOrig.textContent = it.orig ? fmt(it.orig) : '';
-      pdOrig.style.display = it.orig ? '' : 'none';
+      pdOrig.textContent = tabX ? fmt(tabX) : '';
+      pdOrig.style.display = tabX ? '' : 'none';
     }
     pdUnavailBadge.hidden = it.avail;
     pdRibbon.hidden = it.avail;
