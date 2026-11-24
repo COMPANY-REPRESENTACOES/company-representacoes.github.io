@@ -1063,6 +1063,12 @@
   var availBtn = document.getElementById('availBtn');
   var onlyAvail = false;
 
+  /* PADRÃO: preço de tabela riscado em todos os produtos */
+  function pxTabX(it){
+    var t = it.orig || 0;
+    try { if (typeof pxInfo === 'function'){ var i = pxInfo({ it: it, unit: it.price, qty: 1, cod: it.cod }); if (i && i.tab) t = i.tab; } } catch(e){}
+    return (t && it.price && t > it.price + 0.004) ? Math.round(t * 100) / 100 : 0;
+  }
   function pctOff(orig, price){
     if (!orig) return 0;
     return Math.round((1 - price/orig)*100);
@@ -1119,7 +1125,7 @@
   var PROMO_TAG='<span class="promo-tag">Promoção do Mês<small>06/11 a 25/11/26</small></span>';
   function itemCardHTML(it){
     var qty = cart[it.n] || 0;
-    var off = pctOff(it.orig, it.price);
+    var tabX = pxTabX(it), off = pctOff(tabX, it.price);
     var body;
     if (!it.avail){
       body = '<div class="unavail-note">Sem estoque no momento</div>';
@@ -1150,7 +1156,7 @@
             '<span class="price">'+fmt(it.price)+
               (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '')+
             '</span>'+
-            (it.orig ? '<span class="orig-price">'+fmt(it.orig)+'</span>' : '')+
+            (tabX ? '<span class="orig-price">'+fmt(tabX)+'</span>' : '')+
           '</div>'
         )+
         (it.avail ? pmHTML(it) : '')+
@@ -2083,10 +2089,10 @@
       if (pdPriceRow) pdPriceRow.style.display = 'none';
     } else {
       if (pdPriceRow) pdPriceRow.style.display = '';
-      var off = pctOff(it.orig, it.price);
+      var tabX = pxTabX(it), off = pctOff(tabX, it.price);
       pdPrice.innerHTML = !it.avail ? fmt(it.price) : fmt(it.price) + (off>0 ? '<span class="badge-off">-'+off+'%</span>' : '');
-      pdOrig.textContent = it.orig ? fmt(it.orig) : '';
-      pdOrig.style.display = (it.orig && it.avail) ? '' : 'none';
+      pdOrig.textContent = tabX ? fmt(tabX) : '';
+      pdOrig.style.display = (tabX && it.avail) ? '' : 'none';
     }
     document.getElementById('pdPromo').hidden = !it.promo;
     pdUnavailBadge.hidden = it.avail;
