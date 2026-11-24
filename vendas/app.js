@@ -1302,7 +1302,9 @@ function telaEmail(p){
 }
 
 /* ---------- produtos: consulta rápida de preços ---------- */
-function telaProdutos(){
+function telaProdutos(arg){
+  if (arg && grupo(decodeURIComponent(arg))){ var gid0 = decodeURIComponent(arg); if (!S.fPr || S.fPr.grupo !== gid0) S.fPr = { grupo: gid0, pol: '', marca: '', cat: '', sub: '', q: '', so: false }; S.fPrDe = gid0; }
+  else if (!arg) S.fPrDe = '';
   if (!S.cat || !S.cat.grupos || !S.cat.grupos.length){ casca('<h1>Produtos</h1><div class="card empty">O catálogo ainda não foi carregado neste aparelho. Conecte à internet e abra de novo.</div>'); return; }
   var grs = S.cat.grupos.slice().sort(function(a, b){ return a.nome.localeCompare(b.nome, 'pt'); });
   var st = S.fPr = S.fPr || { grupo: grs[0].id, pol: '', marca: '', cat: '', sub: '', q: '', so: false };
@@ -1339,7 +1341,7 @@ function telaProdutos(){
   if (q) lista = '<div class="pr-grid">' + itens.map(card).join('') + '</div>';
   else { var atual = null, buf = ''; itens.forEach(function(x){ var c = x.i.cat || 'Outros'; if (c !== atual){ if (buf) lista += '<div class="pr-grid">' + buf + '</div>'; buf = ''; atual = c; lista += '<div class="cat-sec">' + esc(c) + '</div>'; } buf += card(x); }); if (buf) lista += '<div class="pr-grid">' + buf + '</div>'; }
   var lg = logoRep(g.id);
-  var html = '<div class="row" style="align-items:center;gap:12px">' + (lg ? '<img class="pr-logo" src="' + esc(lg.url) + '" alt="">' : '') + '<div class="grow"><h1 style="margin:0">Produtos</h1><div class="muted" style="font-size:13px">Consulta rápida de preços · ' + esc(g.nome) + ' · política ' + esc(politicaNome(g.id, pid)) + '</div></div></div>' +
+  var html = (S.fPrDe === g.id ? '<a class="btn sm" href="#representada/' + esc(g.id) + '">← ' + esc(g.nome) + '</a>' : '') + '<div class="row" style="align-items:center;gap:12px;margin-top:' + (S.fPrDe === g.id ? '10px' : '0') + '">' + (lg ? '<img class="pr-logo" src="' + esc(lg.url) + '" alt="">' : '') + '<div class="grow"><h1 style="margin:0">Produtos</h1><div class="muted" style="font-size:13px">Consulta rápida de preços · ' + esc(g.nome) + ' · política ' + esc(politicaNome(g.id, pid)) + '</div></div></div>' +
     '<div class="card pr-fil"><div class="pr-fl">' +
       '<label><span class="lb">Representada</span><select class="in" id="pG">' + grs.map(function(x){ return '<option value="' + x.id + '"' + (x.id === g.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select></label>' +
       (g.politicas.length > 1 ? '<label><span class="lb">Política de preço</span><select class="in" id="pP">' + g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (x.id === pid ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') + '</select></label>' : '') +
@@ -1354,7 +1356,7 @@ function telaProdutos(){
     (itens.length ? lista : '<div class="card empty">Nada encontrado.</div>');
   casca(html);
   var re = function(){ telaProdutos(); };
-  document.getElementById('pG').onchange = function(){ st.grupo = this.value; st.pol = ''; st.marca = ''; st.cat = ''; st.sub = ''; st.q = ''; re(); };
+  document.getElementById('pG').onchange = function(){ S.fPrDe = ''; st.grupo = this.value; st.pol = ''; st.marca = ''; st.cat = ''; st.sub = ''; st.q = ''; re(); };
   var e;
   if ((e = document.getElementById('pP'))) e.onchange = function(){ st.pol = this.value; re(); };
   if ((e = document.getElementById('pM'))) e.onchange = function(){ st.marca = this.value; st.cat = ''; st.sub = ''; re(); };
@@ -1685,7 +1687,7 @@ function telaRepresentadas(){
       return '<div class="card pad"><div class="row">' + (d.logo && d.logo.url ? '<img class="rep-logo-mini" src="' + esc(d.logo.url) + '" alt="">' : '') + '<div class="grow"><b>' + esc(r.nome) + '</b>' + (temOf ? ' <span class="badge" style="background:#f2c14e;color:#1c1c1e">oferta do mês</span>' : '') +
         (function(){ var t = REP_ANEXOS.reduce(function(s, c){ return s + (an[c[0]] || []).length; }, 0); return t ? ' <span class="badge">📎 ' + t + ' anexo' + (t > 1 ? 's' : '') + '</span>' : ''; })() +
         '<div class="muted" style="font-size:13px">' + esc([d.cnpj ? fmtDoc(d.cnpj) : '', d.telefone, d.email_pedidos].filter(Boolean).join(' · ') || 'Dados ainda não preenchidos') + '</div></div>' +
-        '<div class="row" style="gap:6px"><a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
+        '<div class="row" style="gap:6px">' + (grupo(r.id) ? '<a class="btn sm" href="#produtos/' + esc(r.id) + '">📦 Produtos</a>' : '') + '<a class="btn sm pri" href="#representada/' + esc(r.id) + '">Abrir</a><a class="btn sm" href="#representada/' + esc(r.id) + '/editar">Editar</a></div></div></div>';
     }).join('') + '</div>');
 }
 
@@ -1696,7 +1698,7 @@ function telaRepresentada(arg){
   if (!r){ casca('<div class="card empty">Representada não encontrada. <a href="#representadas">Voltar</a></div>'); return; }
   if (editar) return editarRep(r, nova);
   var d = r.dados || {}, an = anexosRep(d);
-  var html = '<div class="row"><a class="btn sm" href="#representadas">← Representadas</a><h1 style="margin:4px 0" class="grow">' + esc(r.nome) + '</h1><a class="btn pri" href="#representada/' + esc(r.id) + '/editar">Editar</a></div>' +
+  var html = '<div class="row"><a class="btn sm" href="#representadas">← Representadas</a><h1 style="margin:4px 0" class="grow">' + esc(r.nome) + '</h1>' + (grupo(r.id) ? '<a class="btn" href="#produtos/' + esc(r.id) + '">📦 Produtos</a>' : '') + '<a class="btn pri" href="#representada/' + esc(r.id) + '/editar">Editar</a></div>' +
     (d.logo && d.logo.url ? '<div class="card pad" style="margin-top:10px;text-align:center"><img class="rep-logo-big" src="' + esc(d.logo.url) + '" alt="Logomarca ' + esc(r.nome) + '" data-zoom="' + esc(d.logo.url) + '" data-leg="' + esc(r.nome) + '"></div>' : '') +
     '<div class="card pad cform" style="margin-top:10px"><h2 class="sec">⭐ Oferta do mês</h2>' +
       (d.oferta_texto || (an.oferta && an.oferta.length) ? txtBloco(d.oferta_texto) + arquivosHtml(an.oferta) : '<span class="muted">Nenhuma oferta cadastrada. Toque em Editar e use o botão Anexar oferta do mês (foto ou PDF).</span>') + '</div>' +
@@ -1878,7 +1880,7 @@ function render(){
   if (r.nome === 'representada') return telaRepresentada(r.arg);
   if (r.nome === 'emails') return telaEmails();
   if (r.nome === 'desempenho') return telaDesempenho();
-  if (r.nome === 'produtos') return telaProdutos();
+  if (r.nome === 'produtos') return telaProdutos(r.arg);
   if (r.nome === 'transportadoras') return telaTransportadoras(r.arg);
   if (r.nome === 'mais') return telaMais();
   return telaPedidos();
