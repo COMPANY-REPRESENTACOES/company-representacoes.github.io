@@ -1921,10 +1921,10 @@ window.__cv = S;
 })();
 
 /* ----- foto ampliada: toque na foto do produto (catálogo ou pedido) abre em tamanho grande; X fecha ----- */
-function abrirZoom(src, legenda){
+function abrirZoom(src, legenda, precoHtml){
   fecharZoom();
   var z = document.createElement('div'); z.className = 'zoom'; z.id = 'zoomFoto';
-  z.innerHTML = '<button type="button" class="zx" aria-label="Fechar foto">✕</button><img alt="">' + (legenda ? '<div class="zc"></div>' : '');
+  z.innerHTML = '<button type="button" class="zx" aria-label="Fechar foto">✕</button><img alt="">' + (legenda ? '<div class="zc"></div>' : '') + (precoHtml ? '<div class="zp">' + precoHtml + '</div>' : '');
   z.querySelector('img').src = src;
   if (legenda) z.querySelector('.zc').textContent = legenda;
   z.addEventListener('click', function(e){ if (e.target === z || e.target.classList.contains('zx')) fecharZoom(); });
@@ -1938,6 +1938,12 @@ document.addEventListener('click', function(e){
   if (!src || /company\.png$/.test(src)) return; // sem foto do produto
   e.preventDefault(); e.stopPropagation();
   var box = im.closest('.pr-card') || im.parentNode, cod = box.querySelector('b, .cod'), ds = box.querySelector('.pr-desc, .ds, div.muted');
-  abrirZoom(src, [cod && cod.textContent, ds && ds.textContent].filter(Boolean).join(' · '));
+  var preco = '', pv = box.querySelector('.pr-val, .pr-tiers');
+  if (pv) preco = pv.innerHTML;
+  else if (box.classList.contains('it') && ED && ED.p.itens[+box.dataset.i]){
+    var item = ED.p.itens[+box.dataset.i], pi = precoInfo(ED.p, item);
+    preco = fmt(item.unit) + (pi.tab && pi.tab > item.unit + 0.004 ? ' <s>' + fmt(pi.tab) + '</s> <em>' + esc(pi.desc) + '</em>' : '');
+  }
+  abrirZoom(src, [cod && cod.textContent, ds && ds.textContent].filter(Boolean).join(' · '), preco);
 }, true);
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('zoomFoto')){ e.stopPropagation(); fecharZoom(); } }, true);
