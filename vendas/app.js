@@ -619,6 +619,12 @@ function verHistorico(){
 }
 
 /* ----- catálogo (adicionar produto) ----- */
+/* resumo do pedido mostrado no Adicionar produto */
+function resumoCat(){
+  var p = ED.p, tot = totalItens(p.itens), un = p.itens.reduce(function(s2, i){ return s2 + (+i.qty || 0); }, 0), r = regraDe(p.grupo);
+  var falta = r && r.minimo && tot < r.minimo ? '<small class="cr-f">faltam ' + fmt(r2(r.minimo - tot)) + ' p/ mínimo</small>' : '';
+  return '<span class="cr-i">🛒 ' + p.itens.length + ' ' + (p.itens.length === 1 ? 'item' : 'itens') + ' · ' + un + ' un.</span><b>' + fmt(tot) + '</b>' + falta;
+}
 function abrirCatalogo(){
   var p = ED.p, g = grupo(p.grupo), pid = politicaId(p.grupo, p.politica);
   if (!g){ toast('Catálogo deste grupo não está no aparelho.'); return; }
@@ -667,7 +673,7 @@ function abrirCatalogo(){
         tags.map(function(t){ var v = '#tag:' + t.nome; return '<option value="' + esc(v) + '"' + (st.cat === v ? ' selected' : '') + '>★ ' + esc(t.nome) + ' (' + t.n + ')</option>'; }).join('') +
         cats.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.cat === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select>' +
         (subs.length > 1 ? '<select class="in" id="cS" title="Subcategoria"><option value="">Subcategoria: todas</option>' + subs.map(function(c){ return '<option value="' + esc(c.nome) + '"' + (st.sub === c.nome ? ' selected' : '') + '>' + esc(c.nome) + ' (' + c.n + ')</option>'; }).join('') + '</select>' : '')) +
-      '<button class="chip so" data-so aria-pressed="' + st.so + '" title="Só disponíveis"><span class="lg">Só disponíveis</span><span class="sh">Disp.</span></button></div>' +
+      '<button class="chip so" data-so aria-pressed="' + st.so + '" title="Só disponíveis"><span class="lg">Só disponíveis</span><span class="sh">Disp.</span></button><div class="cat-res" id="cRes">' + resumoCat() + '</div></div>' +
       '<div class="muted cat-info">' + esc(q ? 'Resultado da busca em todas as linhas' : (mar.sub || '')) + ' · preços da política ' + esc(politicaNome(p.grupo, pid)) + '</div></div>' +
       '<div class="cat-list">' + lista + '</div>' + (itens.length ? '' : '<div class="empty">Nada encontrado.</div>') +
       (corte ? '<div class="muted" style="text-align:center;padding:10px">Mostrando os primeiros ' + LIM + '. Escolha uma categoria ou use a busca para ver os demais.</div>' : '');
@@ -695,6 +701,7 @@ function abrirCatalogo(){
       else { ED.p.itens.push({ cod: it.cod, desc: it.desc, qty: qty, unit: r2(unit), label: label, marca: mm.nome }); aplicarAvista(ED.p); }
       ED.sujo = true;
       if (b.dataset.add) toast(it.cod + (label ? ' (' + label + ')' : '') + ' adicionado', 1200);
+      var cr = m.body.querySelector('#cRes'); if (cr){ cr.innerHTML = resumoCat(); cr.classList.remove('pulse'); void cr.offsetWidth; cr.classList.add('pulse'); }
       m.body.querySelectorAll('.opts').forEach(function(o){ if (o.dataset.k === it.k && o.dataset.om === mm.id){ o.innerHTML = optsDe({ i: it, m: mm }); liga(o); } });
     }; });
   }
