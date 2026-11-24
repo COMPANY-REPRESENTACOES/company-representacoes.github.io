@@ -38,12 +38,36 @@ function aplicarSolez(p){
   p.desc_solez = { base: n.base, term: n.term };
   return true;
 }
+/* Ronsani: desconto progressivo (igual ao Pedido Express Ronsani) + regras de prazo */
+REGRAS.ronsani = { progressivo: [[3000, 4], [6000, 6], [9000, 8]], minimo: 1000, minDup: 700,
+  avistas: [ { nome: 'À vista antecipado PIX (3% de desconto)', desc: 3 } ],
+  prazos: [ { p: '30 dd' }, { p: '30/45' }, { p: '30/60' }, { p: '30/45/60' }, { p: '30/60/90' }, { p: '30/45/60/75/90' },
+    { p: '30/60/90/120', acima: 7000, aut: true }, { p: '30/45/60/75/90/105/120', acima: 7000, aut: true } ],
+  texto: 'pedido mínimo R$ 1.000 · boleto mínimo R$ 700 · prazo máximo 90 dias · à vista antecipado PIX 3% · acima de R$ 7 mil 30/60/90/120 ou 30/45/60/75/90/105/120 mediante autorização · desconto progressivo acima de R$ 3.000 4%, R$ 6.000 6%, R$ 9.000 8% (itens em promoção não entram)' };
+function catTab(gid, it){ var a = acharItem(gid, it.cod); return a && a.it.p ? { tab: a.it.p.tab, promo: !!(a.it.tag && /promo/i.test(a.it.tag)) } : null; }
+function progNums(p){
+  var r = REGRAS[p.grupo], g = 0, sem = 0;
+  p.itens.forEach(function(it){ var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); g += t * it.qty; });
+  g = r2(g); var pct = 0; r.progressivo.forEach(function(f){ if (g > f[0]) pct = f[1]; });
+  p.itens.forEach(function(it){ var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); sem += r2(t * (c && c.promo ? 1 : (1 - pct/100))) * it.qty; });
+  var prox = r.progressivo.find(function(f){ return g <= f[0]; });
+  return { bruto: g, pct: pct, final: r2(sem), prox: prox, falta: prox ? r2(prox[0] - g + 0.01) : 0 };
+}
+/* recalcula os preços com o desconto progressivo e o à vista (Ronsani) */
+function aplicarProg(p){
+  var r = REGRAS[p.grupo]; if (!r || !r.progressivo) return false;
+  var n = progNums(p), a = avistaDe(p), av = a ? a.desc : 0;
+  p.itens.forEach(function(it){ var c = catTab(p.grupo, it); if (!c || c.tab == null) return; var u = c.promo ? c.tab : c.tab * (1 - n.pct/100); it.unit = r2(r2(u) * (1 - av/100)); delete it.base; });
+  p.desc_prog = { pct: n.pct, av: av }; delete p.desc_avista;
+  return true;
+}
+function aplicarPreco(p){ return aplicarSolez(p) || aplicarProg(p); }
 function regraDe(gid){ return REGRAS[gid] || null; }
 function nParcelas(pz){ return String(pz).split('/').length; }
 /* devolve '' se o prazo vale para esse total, ou o motivo se não vale */
-function prazoMotivo(r, op, tot){
+function prazoMotivo(r, op, tot, totDup){
   if (op.acima && tot <= op.acima) return 'só acima de ' + fmt(op.acima);
-  var n = nParcelas(op.p); if (r.minDup && tot / n < r.minDup) return 'duplicata abaixo de ' + fmt(r.minDup);
+  var n = nParcelas(op.p), td = totDup != null ? totDup : tot; if (r.minDup && td / n < r.minDup) return (r.progressivo ? 'boleto' : 'duplicata') + ' abaixo de ' + fmt(r.minDup);
   return '';
 }
 function avistaDe(p){ var r = regraDe(p.grupo); return (r && r.avistas || []).find(function(a){ return a.nome === p.prazo; }) || null; }
@@ -52,6 +76,7 @@ function eAvista(p){ return !!avistaDe(p); }
 function totBruto(p){ return r2(p.itens.reduce(function(s, i){ return s + r2(i.qty * (i.base != null ? i.base : i.unit)); }, 0)); }
 /* aplica ou tira o desconto à vista no preço de cada item (guarda o preço sem desconto em it.base) */
 function aplicarAvista(p){
+  var rr = regraDe(p.grupo); if (rr && rr.progressivo) return;
   var a = avistaDe(p), d = a ? a.desc : 0;
   p.itens.forEach(function(it){
     if (d){ if (it.base == null) it.base = it.unit; it.unit = r2(it.base * (1 - d/100)); }
@@ -63,10 +88,10 @@ function aplicarAvista(p){
 function avisosRegra(p){
   var r = regraDe(p.grupo); if (!r) return [];
   if (r.solez) return p.prazo && r.prazosDesc.some(function(x){ return x[0] === p.prazo; }) ? [] : ['Escolha o prazo de pagamento para aplicar o desconto de prazo.'];
-  var tot = totBruto(p), av = [];
+  var pn = r.progressivo ? progNums(p) : null, tot = pn ? pn.bruto : totBruto(p), totD = pn ? pn.final : tot, av = [];
   if (r.minimo && tot < r.minimo) av.push('Pedido mínimo ' + fmt(r.minimo) + ' (faltam ' + fmt(r2(r.minimo - tot)) + ').');
   if (!p.prazo) av.push('Escolha o prazo de pagamento.');
-  else if (!eAvista(p)){ var op = r.prazos.find(function(x){ return x.p === p.prazo; }); var mo = op ? prazoMotivo(r, op, tot) : 'prazo fora da política'; if (mo) av.push('Prazo ' + p.prazo + ' não vale para ' + fmt(tot) + ': ' + mo + '.'); }
+  else if (!eAvista(p)){ var op = r.prazos.find(function(x){ return x.p === p.prazo; }); var mo = op ? prazoMotivo(r, op, tot, totD) : 'prazo fora da política'; if (mo) av.push('Prazo ' + p.prazo + ' não vale para ' + fmt(totD) + ': ' + mo + '.'); else if (op.aut) av.push('Prazo ' + p.prazo + ' só mediante autorização da Ronsani.'); }
   return av;
 }
 function confereRegra(p, acao){ var av = avisosRegra(p); return !av.length || confirm(av.join('\n') + '\n\n' + acao + ' mesmo assim?'); }
@@ -79,11 +104,11 @@ function prazoCampo(p, travado){
     if (p.prazo && !achou) os = '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>' + os;
     return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + os + '</select>';
   }
-  var tot = totBruto(p), conhecidos = (r.avistas || []).map(function(a){ return a.nome; }).concat(r.prazos.map(function(x){ return x.p; }));
+  var pn = r.progressivo ? progNums(p) : null, tot = pn ? pn.bruto : totBruto(p), totD = pn ? pn.final : tot, conhecidos = (r.avistas || []).map(function(a){ return a.nome; }).concat(r.prazos.map(function(x){ return x.p; }));
   var o = '<option value="">Selecione</option>';
   if (p.prazo && conhecidos.indexOf(p.prazo) < 0) o += '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>';
   (r.avistas || []).forEach(function(a){ o += '<option value="' + esc(a.nome) + '"' + (p.prazo === a.nome ? ' selected' : '') + '>' + esc(a.nome) + '</option>'; });
-  r.prazos.forEach(function(x){ var mo = prazoMotivo(r, x, tot); o += '<option value="' + esc(x.p) + '"' + (p.prazo === x.p ? ' selected' : '') + (mo && p.prazo !== x.p ? ' disabled' : '') + '>' + esc(x.p) + (mo ? ' — ' + mo : '') + '</option>'; });
+  r.prazos.forEach(function(x){ var mo = prazoMotivo(r, x, tot, totD); o += '<option value="' + esc(x.p) + '"' + (p.prazo === x.p ? ' selected' : '') + (mo && p.prazo !== x.p ? ' disabled' : '') + '>' + esc(x.p) + (mo ? ' — ' + mo : x.aut ? ' — mediante autorização' : '') + '</option>'; });
   return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + o + '</select>';
 }
 function regraBox(p){
@@ -94,6 +119,13 @@ function regraBox(p){
       (n.prox ? '<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + fmt(n.falta) + ' (em tabela) para o desconto de ' + n.prox[1] + '%</div>' : '') +
       av2.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') +
       '<div class="ri">Política Solez: 40% sobre a tabela; pedido bruto acima de ' + fmt(4600) + ': 44%; acima de ' + fmt(8999) + ': 48%; depois o desconto do prazo (À vista 17%, 30 DD 18%, 30/45/60/75 DD 15%, 40/45/60/90 e 30/60/90/120 DD 10%). Itens Black Friday com 7% antes.</div></div>';
+  }
+  if (r.progressivo){
+    var n = progNums(p), avr = avisosRegra(p), ap = avistaDe(p);
+    return '<div class="regra"><div class="rl"><span>' + (n.pct ? '✓ Desconto progressivo ' + n.pct + '% aplicado (exceto promoções)' : 'Sem desconto progressivo ainda') + (ap ? ' + à vista ' + ap.desc + '%' : '') + '</span><span>pedido em tabela ' + fmt(n.bruto) + '</span></div>' +
+      (n.prox ? '<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + fmt(n.falta) + ' (em tabela) para ' + n.prox[1] + '% de desconto</div>' : '') +
+      avr.map(function(x){ return '<div class="rw">⚠ ' + esc(x) + '</div>'; }).join('') +
+      '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': ' + esc(r.texto) + '.</div></div>';
   }
   var a = avistaDe(p), eco = a ? r2(totBruto(p) - totalItens(p.itens)) : 0, av = avisosRegra(p);
   return '<div class="regra">' + (a ? '<div class="rl"><span>✓ Desconto à vista ' + a.desc + '% já aplicado nos itens (sem ele: ' + fmt(totBruto(p)) + ')</span><span>− ' + fmt(eco) + '</span></div>' : '') +
@@ -221,6 +253,11 @@ function precoInfo(p, it){
   if (p.grupo === 'solez' && p.desc_solez && solezTab(it, true) != null){
     var tcheia = solezTab(it, true), tbf = solezTab(it), ds = p.desc_solez, esp = r2(tbf * (1 - ds.base/100) * (1 - ds.term/100));
     if (Math.abs(esp - r2(it.unit)) < 0.011) return { tab: tcheia, desc: (solezBF(it.cod) ? '7% BF + ' : '') + ds.base + '%' + (ds.term ? ' + ' + ds.term + '%' : '') };
+  }
+  if (p.desc_prog && regraDe(p.grupo) && regraDe(p.grupo).progressivo){
+    var cp = catTab(p.grupo, it);
+    if (cp && cp.tab != null){ var dpp = p.desc_prog, esp2 = r2(r2(cp.promo ? cp.tab : cp.tab * (1 - dpp.pct/100)) * (1 - dpp.av/100));
+      if (Math.abs(esp2 - r2(it.unit)) < 0.011){ var parts = []; if (cp.promo) parts.push('Promoção'); else if (dpp.pct) parts.push(dpp.pct + '%'); if (dpp.av) parts.push(dpp.av + '% à vista'); return { tab: r2(cp.tab), desc: parts.length ? parts.join(' + ') : 'sem desconto' }; } }
   }
   var a = acharItem(p.grupo, it.cod), pid = politicaId(p.grupo, p.politica), unit = r2(it.unit), tab = null, d = 0;
   if (a && pid){
@@ -557,7 +594,7 @@ function telaEditor(){
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
-  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (aplicarSolez(ED.p)){ telaEditor(); return; } if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
+  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (aplicarPreco(ED.p)){ telaEditor(); return; } if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
   document.getElementById('eObs').oninput = function(){ ED.p.obs = this.value; marcar(); };
   document.getElementById('eSt').onchange = function(){ ED.p.status = this.value; marcar(); telaEditor(); };
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
@@ -596,8 +633,8 @@ function ligarItens(travado){
   $app.querySelectorAll('.it').forEach(function(row){
     var i = +row.dataset.i, it = ED.p.itens[i];
     var upd = function(){ ED.sujo = true;
-      var bAnt = ED.p.desc_solez && ED.p.desc_solez.base;
-      if (aplicarSolez(ED.p)){ if (bAnt !== ED.p.desc_solez.base){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
+      var bAnt = JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct]);
+      if (aplicarPreco(ED.p)){ if (bAnt !== JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct])){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
       var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
@@ -616,7 +653,7 @@ function trocarPolitica(pid){
     var cur = it.base != null ? it.base : it.unit;
     if (novo != null && r2(novo) !== r2(cur)){ if (it.base != null) it.base = r2(novo); else it.unit = r2(novo); n++; }
   });
-  aplicarAvista(p); aplicarSolez(p);
+  aplicarAvista(p); aplicarPreco(p);
   p.politica = g.politicas.find(function(x){ return x.id === pid; }).nome; ED.sujo = true;
   telaEditor(); if (n) toast(n + ' preço(s) atualizado(s) para a política ' + p.politica);
 }
@@ -742,7 +779,7 @@ function abrirCatalogo(){
       if (b.dataset.dec){ if (!ex) return; ex.qty -= qty; if (ex.qty <= 0) ED.p.itens.splice(ix, 1); }
       else if (ex) ex.qty += qty;
       else { ED.p.itens.push({ cod: it.cod, desc: it.desc, qty: qty, unit: r2(unit), label: label, marca: mm.nome }); aplicarAvista(ED.p); }
-      ED.sujo = true; aplicarSolez(ED.p);
+      ED.sujo = true; aplicarPreco(ED.p);
       if (b.dataset.add) toast(it.cod + (label ? ' (' + label + ')' : '') + ' adicionado', 1200);
       var cr = m.body.querySelector('#cRes'); if (cr){ cr.innerHTML = resumoCat(); cr.classList.remove('pulse'); void cr.offsetWidth; cr.classList.add('pulse'); }
       m.body.querySelectorAll('.opts').forEach(function(o){ if (o.dataset.k === it.k && o.dataset.om === mm.id){ o.innerHTML = optsDe({ i: it, m: mm }); liga(o); } });
