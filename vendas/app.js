@@ -16,6 +16,28 @@ var REGRAS = {
     prazos: [ { p: '30 dd' }, { p: '30/60' }, { p: '30/45/60' }, { p: '30/60/90' }, { p: '30/45/60/75/90' },
       { p: '30/60/90/120', acima: 5000 }, { p: '30/45/60/75/90/105', acima: 5000 }, { p: '30/45/60/75/90/105/120', acima: 5000 } ] }
 };
+/* Solez: desconto pelo valor do pedido (bruto em tabela) + desconto pelo prazo de pagamento (igual ao Pedido Express Solez) */
+REGRAS.solez = { solez: true,
+  faixas: [[0, 40], [4600, 44], [8999, 48]],
+  prazosDesc: [['À vista', 17], ['30 DD', 18], ['30/45/60/75 DD', 15], ['40/45/60/90 DD', 10], ['30/60/90/120 DD', 10]],
+  bf: { pct: 7, codes: ['SLAPB10','SLAPB11','SLAPB12','SLPAB13','SLATB09','SLATB10','SLATB11','SLATB12','GFP3','GFP4'] } };
+function solezTab(it, cheia){ var a = acharItem('solez', it.cod), o = a && a.it.o && a.it.o.tab; if (!o) return null; var bf = REGRAS.solez.bf.codes.indexOf(it.cod) > -1; return cheia || !bf ? r2(o) : r2(o * (1 - REGRAS.solez.bf.pct/100)); }
+function solezBF(cod){ return REGRAS.solez.bf.codes.indexOf(cod) > -1; }
+function solezNums(p){
+  var r = REGRAS.solez, bruto = r2(p.itens.reduce(function(s2, it){ var t = solezTab(it); return s2 + (t != null ? t * it.qty : 0); }, 0));
+  var base = r.faixas[0][1]; r.faixas.forEach(function(f){ if (bruto > f[0]) base = f[1]; });
+  var pz = r.prazosDesc.find(function(x){ return x[0] === p.prazo; }), term = pz ? pz[1] : 0;
+  var prox = r.faixas.find(function(f){ return bruto <= f[0]; });
+  return { bruto: bruto, base: base, term: term, prox: prox, falta: prox ? r2(prox[0] - bruto + 0.01) : 0 };
+}
+/* recalcula o preço de cada item Solez conforme o valor do pedido e o prazo */
+function aplicarSolez(p){
+  if (p.grupo !== 'solez') return false;
+  var n = solezNums(p);
+  p.itens.forEach(function(it){ var t = solezTab(it); if (t != null) it.unit = r2(t * (1 - n.base/100) * (1 - n.term/100)); });
+  p.desc_solez = { base: n.base, term: n.term };
+  return true;
+}
 function regraDe(gid){ return REGRAS[gid] || null; }
 function nParcelas(pz){ return String(pz).split('/').length; }
 /* devolve '' se o prazo vale para esse total, ou o motivo se não vale */
@@ -40,6 +62,7 @@ function aplicarAvista(p){
 /* avisos das regras: [] quando está tudo certo */
 function avisosRegra(p){
   var r = regraDe(p.grupo); if (!r) return [];
+  if (r.solez) return p.prazo && r.prazosDesc.some(function(x){ return x[0] === p.prazo; }) ? [] : ['Escolha o prazo de pagamento para aplicar o desconto de prazo.'];
   var tot = totBruto(p), av = [];
   if (r.minimo && tot < r.minimo) av.push('Pedido mínimo ' + fmt(r.minimo) + ' (faltam ' + fmt(r2(r.minimo - tot)) + ').');
   if (!p.prazo) av.push('Escolha o prazo de pagamento.');
@@ -50,6 +73,12 @@ function confereRegra(p, acao){ var av = avisosRegra(p); return !av.length || co
 function prazoCampo(p, travado){
   var r = regraDe(p.grupo);
   if (!r) return '<input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"><datalist id="prazosL">' + PRAZOS.map(function(x){ return '<option value="' + x + '">'; }).join('') + '</datalist>';
+  if (r.solez){
+    var os = '<option value="">Selecione o prazo (aplica o desconto de prazo)</option>', achou = false;
+    r.prazosDesc.forEach(function(x){ if (p.prazo === x[0]) achou = true; os += '<option value="' + esc(x[0]) + '"' + (p.prazo === x[0] ? ' selected' : '') + '>' + esc(x[0]) + ' — desconto de prazo ' + x[1] + '%</option>'; });
+    if (p.prazo && !achou) os = '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>' + os;
+    return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + os + '</select>';
+  }
   var tot = totBruto(p), conhecidos = (r.avistas || []).map(function(a){ return a.nome; }).concat(r.prazos.map(function(x){ return x.p; }));
   var o = '<option value="">Selecione</option>';
   if (p.prazo && conhecidos.indexOf(p.prazo) < 0) o += '<option value="' + esc(p.prazo) + '" selected>' + esc(p.prazo) + ' (enviado pelo cliente)</option>';
@@ -59,6 +88,13 @@ function prazoCampo(p, travado){
 }
 function regraBox(p){
   var r = regraDe(p.grupo); if (!r) return '';
+  if (r.solez){
+    var n = solezNums(p), av2 = avisosRegra(p);
+    return '<div class="regra"><div class="rl"><span>Desc. valor de pedido ' + n.base + '%' + (n.term ? ' + desc. prazo ' + n.term + '%' : '') + '</span><span>bruto em tabela ' + fmt(n.bruto) + '</span></div>' +
+      (n.prox ? '<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + fmt(n.falta) + ' (em tabela) para o desconto de ' + n.prox[1] + '%</div>' : '') +
+      av2.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') +
+      '<div class="ri">Política Solez: 40% sobre a tabela; pedido bruto acima de ' + fmt(4600) + ': 44%; acima de ' + fmt(8999) + ': 48%; depois o desconto do prazo (À vista 17%, 30 DD 18%, 30/45/60/75 DD 15%, 40/45/60/90 e 30/60/90/120 DD 10%). Itens Black Friday com 7% antes.</div></div>';
+  }
   var a = avistaDe(p), eco = a ? r2(totBruto(p) - totalItens(p.itens)) : 0, av = avisosRegra(p);
   return '<div class="regra">' + (a ? '<div class="rl"><span>✓ Desconto à vista ' + a.desc + '% já aplicado nos itens (sem ele: ' + fmt(totBruto(p)) + ')</span><span>− ' + fmt(eco) + '</span></div>' : '') +
     (av.length ? av.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') : '') +
@@ -181,6 +217,10 @@ function precoInfo(p, it){
     var pb = precoInfo(p, { cod: it.cod, unit: it.base, label: it.label }), extra = p.desc_avista + '% à vista';
     if (!pb.tab) return { tab: r2(it.base), desc: extra };
     return { tab: pb.tab, desc: pb.desc === 'sem desconto' ? extra : pb.desc + ' + ' + extra };
+  }
+  if (p.grupo === 'solez' && p.desc_solez && solezTab(it, true) != null){
+    var tcheia = solezTab(it, true), tbf = solezTab(it), ds = p.desc_solez, esp = r2(tbf * (1 - ds.base/100) * (1 - ds.term/100));
+    if (Math.abs(esp - r2(it.unit)) < 0.011) return { tab: tcheia, desc: (solezBF(it.cod) ? '7% BF + ' : '') + ds.base + '%' + (ds.term ? ' + ' + ds.term + '%' : '') };
   }
   var a = acharItem(p.grupo, it.cod), pid = politicaId(p.grupo, p.politica), unit = r2(it.unit), tab = null, d = 0;
   if (a && pid){
@@ -517,7 +557,7 @@ function telaEditor(){
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
-  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
+  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (aplicarSolez(ED.p)){ telaEditor(); return; } if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
   document.getElementById('eObs').oninput = function(){ ED.p.obs = this.value; marcar(); };
   document.getElementById('eSt').onchange = function(){ ED.p.status = this.value; marcar(); telaEditor(); };
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
@@ -555,7 +595,10 @@ function ligarItens(travado){
   if (travado) return;
   $app.querySelectorAll('.it').forEach(function(row){
     var i = +row.dataset.i, it = ED.p.itens[i];
-    var upd = function(){ ED.sujo = true; var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
+    var upd = function(){ ED.sujo = true;
+      var bAnt = ED.p.desc_solez && ED.p.desc_solez.base;
+      if (aplicarSolez(ED.p)){ if (bAnt !== ED.p.desc_solez.base){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
+      var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
     row.querySelector('[data-q]').onchange = function(){ var v = parseInt(this.value,10); it.qty = v > 0 ? v : 1; this.value = it.qty; upd(); };
@@ -573,7 +616,7 @@ function trocarPolitica(pid){
     var cur = it.base != null ? it.base : it.unit;
     if (novo != null && r2(novo) !== r2(cur)){ if (it.base != null) it.base = r2(novo); else it.unit = r2(novo); n++; }
   });
-  aplicarAvista(p);
+  aplicarAvista(p); aplicarSolez(p);
   p.politica = g.politicas.find(function(x){ return x.id === pid; }).nome; ED.sujo = true;
   telaEditor(); if (n) toast(n + ' preço(s) atualizado(s) para a política ' + p.politica);
 }
@@ -699,7 +742,7 @@ function abrirCatalogo(){
       if (b.dataset.dec){ if (!ex) return; ex.qty -= qty; if (ex.qty <= 0) ED.p.itens.splice(ix, 1); }
       else if (ex) ex.qty += qty;
       else { ED.p.itens.push({ cod: it.cod, desc: it.desc, qty: qty, unit: r2(unit), label: label, marca: mm.nome }); aplicarAvista(ED.p); }
-      ED.sujo = true;
+      ED.sujo = true; aplicarSolez(ED.p);
       if (b.dataset.add) toast(it.cod + (label ? ' (' + label + ')' : '') + ' adicionado', 1200);
       var cr = m.body.querySelector('#cRes'); if (cr){ cr.innerHTML = resumoCat(); cr.classList.remove('pulse'); void cr.offsetWidth; cr.classList.add('pulse'); }
       m.body.querySelectorAll('.opts').forEach(function(o){ if (o.dataset.k === it.k && o.dataset.om === mm.id){ o.innerHTML = optsDe({ i: it, m: mm }); liga(o); } });
