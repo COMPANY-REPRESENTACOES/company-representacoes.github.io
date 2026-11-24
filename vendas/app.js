@@ -549,6 +549,7 @@ function telaPedidos(){
   $app.querySelectorAll('[data-st]').forEach(function(b){ b.onclick = function(){ S.filtro.st = b.dataset.st; telaPedidos(); }; });
   $app.querySelectorAll('[data-org]').forEach(function(b){ b.onclick = function(){ S.filtro.org = b.dataset.org; telaPedidos(); }; });
   $app.querySelectorAll('[data-vend]').forEach(function(b){ b.onclick = function(){ S.filtro.vend = b.dataset.vend; telaPedidos(); }; });
+  $app.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(e){ e.preventDefault(); e.stopPropagation(); confirmarExcluir(b.dataset.del); }; });
 }
 function cardPedido(p){
   var c = p.cliente || {};
@@ -559,7 +560,41 @@ function cardPedido(p){
     '<div class="row" style="gap:6px">' + '<span class="badge st-' + p.status + '">' + esc(STATUS_NOME[p.status] || p.status) + '</span>' +
       (p.origem === 'express' ? '<span class="badge b-express">Pedido Express</span>' : '') +
       (souAdmin() ? '<span class="badge">' + esc(CFG.vendedores[p.vendedor_codigo] || p.vendedor_codigo) + '</span>' : '') +
-      (pendentes(p.id) ? '<span class="badge b-pend">⟳ aguardando envio</span>' : '') + '</div><div></div></a>';
+      (pendentes(p.id) ? '<span class="badge b-pend">⟳ aguardando envio</span>' : '') + '</div>' +
+    '<div class="ped-del-w"><button type="button" class="btn sm ped-del" data-del="' + esc(p.id) + '">🗑 Excluir</button></div></a>';
+}
+/* excluir pedido (com confirmação) */
+function confirmarExcluir(id){
+  var p = S.pedidos[id]; if (!p) return;
+  var c = p.cliente || {};
+  var m = modal('Excluir pedido',
+    '<p style="margin-top:0">Tem certeza que deseja excluir o pedido <b>' + esc(p.numero) + '</b>?</p>' +
+    '<div class="kv"><span>Cliente</span><span>' + esc(c.name || '—') + '</span><span>Representada</span><span>' + esc(p.marca || '') + '</span><span>Total</span><span>' + fmt(p.total) + '</span></div>' +
+    '<p class="muted" style="font-size:13px">Esta ação não pode ser desfeita: o pedido some do programa para todos os vendedores.</p>' +
+    '<div class="row" style="gap:8px;margin-top:12px"><button class="btn grow" data-nao>Cancelar</button><button class="btn grow btn-del" data-sim>Sim, excluir pedido</button></div>');
+  m.body.querySelector('[data-nao]').onclick = function(){ m.ov.querySelector('[data-x]').click(); };
+  m.body.querySelector('[data-sim]').onclick = function(){
+    var b = this; b.disabled = true; b.textContent = 'Excluindo…';
+    excluirPedido(id).then(function(){
+      m.ov.querySelector('[data-x]').click(); toast('Pedido ' + p.numero + ' excluído.'); if (rota().nome === 'pedidos') telaPedidos(); else location.hash = '#pedidos';
+    }, function(e){ b.disabled = false; b.textContent = 'Sim, excluir pedido'; toast(String(e.message || e).slice(0, 200), 7000); });
+  };
+}
+function excluirPedido(id){
+  var soLocal = S.fila.some(function(o){ return o.id === id && o.tipo === 'inserir'; });
+  var limpaLocal = function(){
+    S.fila = S.fila.filter(function(o){ return o.id !== id; }); delete S.pedidos[id];
+    if (ED && ED.p && ED.p.id === id) ED = null;
+    return salvarLocal();
+  };
+  if (soLocal) return limpaLocal();
+  if (!navigator.onLine) return Promise.reject(new Error('Sem internet: para excluir um pedido já enviado ao sistema, conecte-se à internet.'));
+  return api('pedido_historico?pedido_id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=minimal' }).catch(function(e){ if (e && e.auth) throw e; })
+    .then(function(){ return api('pedidos?id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=representation' }); })
+    .then(function(r){
+      if (!r || !r.length){ var e = new Error('O banco não permitiu excluir este pedido (falta a permissão de exclusão no banco). Fale com o administrador.'); throw e; }
+      return limpaLocal();
+    });
 }
 
 /* ----- editor de pedido ----- */
