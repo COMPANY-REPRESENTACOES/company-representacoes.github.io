@@ -14,11 +14,19 @@ Deno.serve(async (req) => {
   if (/^[0-9a-f-]{36}$/i.test(t)) {
     try {
       const db = createClient(Deno.env.get("SUPABASE_URL")!, chaveServico(), { auth: { persistSession: false } });
-      const { data } = await db.from("emails_enviados").select("id, lido_em, aberturas").eq("token", t).maybeSingle();
+      const { data } = await db.from("emails_enviados").select("id, enviado_em, lido_em, aberturas, pre_aberturas").eq("token", t).maybeSingle();
       if (data) {
-        await db.from("emails_enviados").update({
-          lido: true, lido_em: data.lido_em || new Date().toISOString(), aberturas: (data.aberturas || 0) + 1,
-        }).eq("id", data.id);
+        const ua = (req.headers.get("user-agent") || "").slice(0, 200);
+        // servidores de e-mail e antivírus baixam as imagens logo na entrega (segundos depois do envio):
+        // isso não é leitura da pessoa, então só conta como lido depois de 2 minutos do envio
+        const seg = (Date.now() - new Date(data.enviado_em).getTime()) / 1000;
+        if (seg < 120) {
+          await db.from("emails_enviados").update({ pre_aberturas: (data.pre_aberturas || 0) + 1, ultimo_acesso: ua }).eq("id", data.id);
+        } else {
+          await db.from("emails_enviados").update({
+            lido: true, lido_em: data.lido_em || new Date().toISOString(), aberturas: (data.aberturas || 0) + 1, ultimo_acesso: ua,
+          }).eq("id", data.id);
+        }
       }
     } catch (_) { /* nunca quebra a imagem */ }
   }

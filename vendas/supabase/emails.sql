@@ -27,3 +27,6 @@ create policy "emails conferir" on public.emails_enviados for update to authenti
 -- permissões da tabela (o banco não libera tabelas novas sozinho)
 grant select, insert, update on table public.emails_enviados to service_role;
 grant select, update on table public.emails_enviados to authenticated;
+-- 24/11/2026: acessos automáticos na entrega (menos de 2 min do envio) não contam como leitura
+alter table public.emails_enviados add column if not exists pre_aberturas int not null default 0;
+alter table public.emails_enviados add column if not exists ultimo_acesso text;
