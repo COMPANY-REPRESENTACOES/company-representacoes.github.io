@@ -43,13 +43,14 @@ REGRAS.ronsani = { progressivo: [[3000, 4], [6000, 6], [9000, 8]], minimo: 1000,
   avistas: [ { nome: 'À vista antecipado PIX (3% de desconto)', desc: 3 } ],
   prazos: [ { p: '30 dd' }, { p: '30/45' }, { p: '30/60' }, { p: '30/45/60' }, { p: '30/60/90' }, { p: '30/45/60/75/90' },
     { p: '30/60/90/120', acima: 7000, aut: true }, { p: '30/45/60/75/90/105/120', acima: 7000, aut: true } ],
-  texto: 'pedido mínimo R$ 1.000 · boleto mínimo R$ 700 · prazo máximo 90 dias · à vista antecipado PIX 3% · acima de R$ 7 mil 30/60/90/120 ou 30/45/60/75/90/105/120 mediante autorização · desconto progressivo acima de R$ 3.000 4%, R$ 6.000 6%, R$ 9.000 8% (itens em promoção não entram)' };
+  taxa: { abaixo: 3500, valor: 130, cod: 'REDESPACHO', desc: 'Taxa de redespacho até SP capital (pedido líquido abaixo de R$ 3.500,00)' },
+  texto: 'pedido mínimo R$ 1.000 · pedido líquido abaixo de R$ 3.500: redespacho R$ 130 até SP capital · boleto mínimo R$ 700 · prazo máximo 90 dias · à vista antecipado PIX 3% · acima de R$ 7 mil 30/60/90/120 ou 30/45/60/75/90/105/120 mediante autorização · desconto progressivo acima de R$ 3.000 4%, R$ 6.000 6%, R$ 9.000 8% (itens em promoção não entram)' };
 function catTab(gid, it){ var a = acharItem(gid, it.cod); return a && a.it.p ? { tab: a.it.p.tab, promo: !!(a.it.tag && /promo/i.test(a.it.tag)) } : null; }
 function progNums(p){
   var r = REGRAS[p.grupo], g = 0, sem = 0;
-  p.itens.forEach(function(it){ var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); g += t * it.qty; });
+  p.itens.forEach(function(it){ if (it.taxa) return; var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); g += t * it.qty; });
   g = r2(g); var pct = 0; r.progressivo.forEach(function(f){ if (g > f[0]) pct = f[1]; });
-  p.itens.forEach(function(it){ var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); sem += r2(t * (c && c.promo ? 1 : (1 - pct/100))) * it.qty; });
+  p.itens.forEach(function(it){ if (it.taxa) return; var c = catTab(p.grupo, it); var t = c && c.tab != null ? c.tab : (it.base != null ? it.base : it.unit); sem += r2(t * (c && c.promo ? 1 : (1 - pct/100))) * it.qty; });
   var prox = r.progressivo.find(function(f){ return g <= f[0]; });
   return { bruto: g, pct: pct, final: r2(sem), prox: prox, falta: prox ? r2(prox[0] - g + 0.01) : 0 };
 }
@@ -59,7 +60,16 @@ function aplicarProg(p){
   var n = progNums(p), a = avistaDe(p), av = a ? a.desc : 0;
   p.itens.forEach(function(it){ var c = catTab(p.grupo, it); if (!c || c.tab == null) return; var u = c.promo ? c.tab : c.tab * (1 - n.pct/100); it.unit = r2(r2(u) * (1 - av/100)); delete it.base; });
   p.desc_prog = { pct: n.pct, av: av }; delete p.desc_avista;
+  aplicarTaxa(p);
   return true;
+}
+/* taxa de redespacho: entra como linha do pedido quando o líquido fica abaixo do valor (Ronsani) */
+function aplicarTaxa(p){
+  var r = REGRAS[p.grupo], tx = r && r.taxa; if (!tx) return;
+  var merc = p.itens.filter(function(it){ return !it.taxa; }), liq = r2(merc.reduce(function(s2, it){ return s2 + r2(it.qty * it.unit); }, 0));
+  var temTaxa = p.itens.some(function(it){ return it.taxa; });
+  if (merc.length && liq < tx.abaixo){ if (!temTaxa) p.itens.push({ cod: tx.cod, desc: tx.desc, qty: 1, unit: tx.valor, label: '', marca: '', taxa: true }); }
+  else if (temTaxa) p.itens = p.itens.filter(function(it){ return !it.taxa; });
 }
 function aplicarPreco(p){ return aplicarSolez(p) || aplicarProg(p); }
 function regraDe(gid){ return REGRAS[gid] || null; }
@@ -614,6 +624,8 @@ function telaEditor(){
   var bEd = document.getElementById('eEdIt'); if (bEd) bEd.onclick = function(){ ED.editItens = !ED.editItens; telaEditor(); };
 }
 function linhaItem(p, it, i, travado){
+  if (it.taxa) return '<div class="it it-taxa" data-i="' + i + '"><div class="tx-ic">🚚</div><div><div class="cod">' + esc(it.cod) + '</div><div class="ds">' + esc(it.desc) + '</div>' +
+    '<div class="ctl"><b>1 × ' + fmt(it.unit) + '</b><span class="lt">' + fmt(it.unit) + '</span></div><div class="muted" style="font-size:12px;margin-top:4px">Sai automaticamente quando o pedido líquido passa de ' + fmt((REGRAS[p.grupo] && REGRAS[p.grupo].taxa || {}).abaixo || 0) + '.</div></div></div>';
   var img = imgDe(p.grupo, it.cod);
   var orig = p.original && p.original.itens ? p.original.itens.find(function(o){ return o.cod === it.cod && (o.label||'') === (it.label||''); }) : null;
   var mudouP = orig && r2(orig.unit) !== r2(it.unit), mudouQ = orig && orig.qty !== it.qty;
@@ -631,16 +643,16 @@ function linhaItem(p, it, i, travado){
 function ligarItens(travado){
   if (travado) return;
   $app.querySelectorAll('.it').forEach(function(row){
-    var i = +row.dataset.i, it = ED.p.itens[i];
+    var i = +row.dataset.i, it = ED.p.itens[i]; if (!it || it.taxa) return;
     var upd = function(){ ED.sujo = true;
-      var bAnt = JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct]);
-      if (aplicarPreco(ED.p)){ if (bAnt !== JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct])){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
+      var bAnt = JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct, ED.p.itens.length]);
+      if (aplicarPreco(ED.p)){ if (bAnt !== JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct, ED.p.itens.length])){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
       var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
     row.querySelector('[data-q]').onchange = function(){ var v = parseInt(this.value,10); it.qty = v > 0 ? v : 1; this.value = it.qty; upd(); };
     row.querySelector('[data-u]').onchange = function(){ var v = parseFloat(String(this.value).replace(/\./g,'').replace(',','.')); if (!(v >= 0)) v = it.unit; it.unit = r2(v); if (it.base != null && ED.p.desc_avista) it.base = r2(v / (1 - ED.p.desc_avista/100)); this.value = it.unit.toFixed(2).replace('.',','); upd(); };
-    row.querySelector('[data-rm]').onclick = function(){ if (confirm('Remover ' + it.cod + ' do pedido?')){ ED.p.itens.splice(i,1); ED.sujo = true; telaEditor(); } };
+    row.querySelector('[data-rm]').onclick = function(){ if (confirm('Remover ' + it.cod + ' do pedido?')){ ED.p.itens.splice(i,1); ED.sujo = true; aplicarPreco(ED.p); telaEditor(); } };
   });
 }
 function trocarPolitica(pid){
@@ -701,9 +713,9 @@ function verHistorico(){
 /* ----- catálogo (adicionar produto) ----- */
 /* resumo do pedido mostrado no Adicionar produto */
 function resumoCat(){
-  var p = ED.p, tot = totalItens(p.itens), un = p.itens.reduce(function(s2, i){ return s2 + (+i.qty || 0); }, 0), r = regraDe(p.grupo);
+  var p = ED.p, merc = p.itens.filter(function(i){ return !i.taxa; }), tx = p.itens.find(function(i){ return i.taxa; }), tot = totalItens(p.itens), un = merc.reduce(function(s2, i){ return s2 + (+i.qty || 0); }, 0), r = regraDe(p.grupo);
   var falta = r && r.minimo && tot < r.minimo ? '<small class="cr-f">faltam ' + fmt(r2(r.minimo - tot)) + ' p/ mínimo</small>' : '';
-  return '<span class="cr-i">🛒 ' + p.itens.length + ' ' + (p.itens.length === 1 ? 'item' : 'itens') + ' · ' + un + ' un.</span><b>' + fmt(tot) + '</b>' + falta;
+  return '<span class="cr-i">🛒 ' + merc.length + ' ' + (merc.length === 1 ? 'item' : 'itens') + ' · ' + un + ' un.' + (tx ? ' · 🚚 +' + fmt(tx.unit) : '') + '</span><b>' + fmt(tot) + '</b>' + falta;
 }
 function abrirCatalogo(){
   var p = ED.p, g = grupo(p.grupo), pid = politicaId(p.grupo, p.politica);
