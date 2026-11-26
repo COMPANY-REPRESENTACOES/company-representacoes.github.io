@@ -71,6 +71,11 @@ function aplicarTaxa(p){
   if (merc.length && liq < tx.abaixo){ if (!temTaxa) p.itens.push({ cod: tx.cod, desc: tx.desc, qty: 1, unit: tx.valor, label: '', marca: '', taxa: true }); }
   else if (temTaxa) p.itens = p.itens.filter(function(it){ return !it.taxa; });
 }
+/* BAP Energy: pedido mínimo e prazos especiais conforme o valor (igual ao Pedido Express BAP) */
+REGRAS.bap = { minimo: 1000,
+  prazos: [ { p: '30/45/60', ate: 5000 }, { p: '30/45/60/75', ate: 5000 }, { p: '15/30/45/60/75', ate: 5000 },
+    { p: '30/60/90', acima: 5000 }, { p: '30/45/60/75/90', acima: 5000 }, { p: '15/30/45/60/75/90', acima: 5000 } ],
+  texto: 'pedido mínimo R$ 1.000,00 · de R$ 1.000 a R$ 5.000: 30/45/60, 30/45/60/75 ou 15/30/45/60/75 · acima de R$ 5.000: 30/60/90, 30/45/60/75/90 ou 15/30/45/60/75/90' };
 /* Ziron: promoções iguais ao Pedido Express Ziron (pedais, Divitone, desconto por quantidade) + à vista 5% */
 REGRAS.ziron = { ziron: true,
   pedal: { codes: ['IMPULSE R','CAMALEON AMP','DELOREAN DELAY','ALIEN REVERB'], min: 10, unit: 160 },
@@ -99,12 +104,82 @@ function aplicarZiron(p){
   p.desc_ziron = { av: av }; delete p.desc_avista;
   return true;
 }
-function aplicarPreco(p){ return aplicarSolez(p) || aplicarProg(p) || aplicarZiron(p); }
+/* Regras por item copiadas dos Pedido Express (vendas/tools/sync-promos.py grava no catálogo):
+   pq = preço por quantidade do item (Dreamer Oferta Quantidade, BAP), pg = promoção por grupo de peças (Michael Promoção do Mês),
+   bf = cesta Black Friday Equipo (desconto conforme peças na cesta), max = limite de quantidade (kits Renove Seu Showroom) */
+var TAB_FATOR = { dreamer: 0.9, michael: 0.645 };
+function catIt(p, it){ var a = acharItem(p.grupo, it.cod); return a ? a.it : null; }
+function dinQtd(p, f){ return p.itens.reduce(function(s2, x){ var c = catIt(p, x); return s2 + (c && f(c, x) ? x.qty : 0); }, 0); }
+function bfPctDe(cesta, q){ var pc = 0; (cesta && cesta.tiers || []).forEach(function(t){ if (q >= t[0]) pc = t[1]; }); return pc; }
+/* preço calculado pela regra do item: { u, d (nome do desconto), tab } ou null se o item não tem regra */
+function dinPreco(p, it){
+  var c = catIt(p, it); if (!c) return null;
+  var pid = politicaId(p.grupo, p.politica), pr = c.p && c.p[pid]; if (pr == null) return null;
+  if (c.pq){
+    var q = dinQtd(p, function(cc){ return cc.cod === c.cod; }), on = null; c.pq.q.forEach(function(t){ if (q >= t[0]) on = t; });
+    var tb = c.o && c.o[pid] && Math.abs(c.o[pid] - pr) > 0.004 ? c.o[pid] : (TAB_FATOR[p.grupo] ? r2(pr / TAB_FATOR[p.grupo]) : pr);
+    return on ? { u: on[1], d: c.pq.nome + ' (' + on[0] + '+ ' + c.pq.u + ')', tab: tb } : { u: pr, d: '', tab: tb };
+  }
+  if (c.pg){
+    var qg = dinQtd(p, function(cc){ return cc.pg && cc.pg.g === c.pg.g; });
+    var tb2 = c.o && c.o[pid] && Math.abs(c.o[pid] - pr) > 0.004 ? c.o[pid] : (TAB_FATOR[p.grupo] ? r2(pr / TAB_FATOR[p.grupo]) : pr);
+    return qg >= c.pg.m ? { u: c.pg.u, d: c.pg.nome, tab: tb2 } : { u: pr, d: '', tab: tb2 };
+  }
+  if (c.bf){
+    var g = grupo(p.grupo), cestas = g && g.cestas || {}, cs = cestas[c.bf], base = c.o && c.o[pid] != null ? c.o[pid] : pr;
+    var d = /^18/.test(pid) ? 18 : 15, tb3 = r2(base / (1 - d/100)), pc = bfPctDe(cs, dinQtd(p, function(cc){ return cc.bf === c.bf; }));
+    if (cs && cs.kit){
+      var kit = g.marcas.reduce(function(a, m){ return a.concat(m.itens.filter(function(x){ return x.bf === c.bf; })); }, []);
+      var kits = Math.min.apply(null, kit.map(function(x){ return dinQtd(p, function(cc){ return cc.cod === x.cod; }); }));
+      if (kits > 0){ var resto = it.qty - Math.min(kits, it.qty), ukit = r2(base * 0.7), ures = r2(base * (1 - Math.max(pc, 10)/100));
+        return { u: r2((Math.min(kits, it.qty) * ukit + resto * ures) / it.qty), d: d + '% + 30% BF (kit)' + (resto > 0 ? ' / ' + Math.max(pc, 10) + '% BF' : ''), tab: tb3 }; }
+    }
+    return { u: r2(base * (1 - pc/100)), d: d + '%' + (pc ? ' + ' + pc + '% BF' : ''), tab: tb3 };
+  }
+  if (c.showroom) return { u: pr, d: 'Renove Seu Showroom', tab: c.o && c.o[pid] || pr };
+  return null;
+}
+/* texto curto da promoção no cartão do produto (Adicionar produto) */
+function promoDica(g, c){
+  var t = '';
+  if (c.pq) t = c.pq.nome + ': ' + c.pq.q.map(function(x){ return fmt(x[1]) + ' a partir de ' + x[0] + ' ' + c.pq.u; }).join(' · ');
+  else if (c.pg) t = c.pg.nome + ': ' + fmt(c.pg.u) + ' a partir de ' + c.pg.m + ' pç (' + c.pg.g + ', pode combinar)';
+  else if (c.bf && g.cestas && g.cestas[c.bf]){ var cs = g.cestas[c.bf]; t = 'Black Friday ' + cs.label + ': ' + cs.tiers.map(function(x){ return (x[0] <= 1 ? 'qualquer qtd' : x[0] + '+ pç') + ' −' + x[1] + '%'; }).join(' · ') + (cs.kit ? ' · kit 1 de cada −30%' : '') + (cs.note ? ' · ' + cs.note : ''); }
+  else if (c.showroom) t = 'Renove Seu Showroom · somente lojas físicas · limitado a ' + (c.max || 1) + ' kit';
+  return t ? '<div style="font-size:12px;font-weight:700;color:#b42318;margin-top:2px">' + esc(t) + '</div>' : '';
+}
+function aplicarDin(p){
+  p.itens.forEach(function(it){
+    if (it.taxa) return; var c = catIt(p, it);
+    if (c && c.max && it.qty > c.max){ it.qty = c.max; toast(it.cod + ': limitado a ' + c.max + (c.showroom ? ' kit' : ' un') + ' por pedido.', 3500); }
+    var dp = dinPreco(p, it); if (dp) { it.unit = r2(dp.u); delete it.base; }
+  });
+}
+function aplicarPreco(p){ var a = aplicarSolez(p) || aplicarProg(p) || aplicarZiron(p); aplicarDin(p); return a; }
+/* avisos das promoções por quantidade (quanto falta para a próxima faixa) */
+function dinAvisos(p){
+  var out = [], vistos = {};
+  p.itens.forEach(function(it){
+    var c = catIt(p, it); if (!c) return;
+    if (c.pq && !vistos['q' + c.cod]){ vistos['q' + c.cod] = 1; var q = dinQtd(p, function(cc){ return cc.cod === c.cod; }), nx = c.pq.q.find(function(t){ return q < t[0]; }), on = c.pq.q.filter(function(t){ return q >= t[0]; }).pop();
+      if (on) out.push([1, '✓ ' + c.cod + ': ' + c.pq.nome + ' ' + fmt(on[1]) + ' aplicada (' + q + ' ' + c.pq.u + ')']);
+      if (nx) out.push([0, 'Faltam ' + (nx[0] - q) + ' ' + c.pq.u + ' de ' + c.cod + ' para ' + fmt(nx[1]) + ' cada']); }
+    if (c.pg && !vistos['g' + c.pg.g]){ vistos['g' + c.pg.g] = 1; var qg = dinQtd(p, function(cc){ return cc.pg && cc.pg.g === c.pg.g; });
+      out.push(qg >= c.pg.m ? [1, '✓ ' + c.pg.nome + ' ' + c.pg.g + ' aplicada (' + qg + ' pç)'] : [0, 'Faltam ' + (c.pg.m - qg) + ' pç de ' + c.pg.g + ' para a ' + c.pg.nome]); }
+    if (c.bf && !vistos['b' + c.bf]){ vistos['b' + c.bf] = 1; var g = grupo(p.grupo), cs = g && g.cestas && g.cestas[c.bf]; if (!cs) return;
+      var qb = dinQtd(p, function(cc){ return cc.bf === c.bf; }), pc = bfPctDe(cs, qb), nb = cs.tiers.find(function(t){ return qb < t[0]; });
+      if (pc) out.push([1, '✓ Black Friday ' + cs.label + ': −' + pc + '% (' + qb + ' pç)']);
+      if (nb) out.push([0, 'Faltam ' + (nb[0] - qb) + ' pç de ' + cs.label + ' para −' + nb[1] + '% Black Friday']); }
+  });
+  return out;
+}
+function dinBox(p){ var a = dinAvisos(p); if (!a.length) return ''; return '<div class="regra">' + a.map(function(x){ return x[0] ? '<div class="rl"><span>' + esc(x[1]) + '</span></div>' : '<div class="ri" style="color:#b42318;font-weight:700">' + esc(x[1]) + '</div>'; }).join('') + '</div>'; }
 function regraDe(gid){ return REGRAS[gid] || null; }
 function nParcelas(pz){ return String(pz).split('/').length; }
 /* devolve '' se o prazo vale para esse total, ou o motivo se não vale */
 function prazoMotivo(r, op, tot, totDup){
   if (op.acima && tot <= op.acima) return 'só acima de ' + fmt(op.acima);
+  if (op.ate && tot > op.ate) return 'só até ' + fmt(op.ate);
   var n = nParcelas(op.p), td = totDup != null ? totDup : tot; if (r.minDup && td / n < r.minDup) return (r.progressivo ? 'boleto' : 'duplicata') + ' abaixo de ' + fmt(r.minDup);
   return '';
 }
@@ -154,7 +229,8 @@ function prazoCampo(p, travado){
   r.prazos.forEach(function(x){ var mo = prazoMotivo(r, x, tot, totD); o += '<option value="' + esc(x.p) + '"' + (p.prazo === x.p ? ' selected' : '') + (mo && p.prazo !== x.p ? ' disabled' : '') + '>' + esc(x.p) + (mo ? ' — ' + mo : x.aut ? ' — mediante autorização' : '') + '</option>'; });
   return '<select class="in" id="ePrazo"' + (travado ? ' disabled' : '') + '>' + o + '</select>';
 }
-function regraBox(p){
+function regraBox(p){ return regraBox0(p) + dinBox(p); }
+function regraBox0(p){
   var r = regraDe(p.grupo); if (!r) return '';
   if (r.ziron){
     var zn = zironNums(p), za = avistaDe(p), zh = [];
@@ -183,7 +259,7 @@ function regraBox(p){
   var a = avistaDe(p), eco = a ? r2(totBruto(p) - totalItens(p.itens)) : 0, av = avisosRegra(p);
   return '<div class="regra">' + (a ? '<div class="rl"><span>✓ Desconto à vista ' + a.desc + '% já aplicado nos itens (sem ele: ' + fmt(totBruto(p)) + ')</span><span>− ' + fmt(eco) + '</span></div>' : '') +
     (av.length ? av.map(function(a){ return '<div class="rw">⚠ ' + esc(a) + '</div>'; }).join('') : '') +
-    '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': pedido mínimo ' + fmt(r.minimo) + (r.avistas ? ' · à vista (PIX ou 15 dd) ' + r.avistas[0].desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>';
+    '<div class="ri">Política ' + esc(grupo(p.grupo) ? grupo(p.grupo).nome : '') + ': ' + (r.texto ? esc(r.texto) + '.</div></div>' : 'pedido mínimo ' + fmt(r.minimo) + (r.avistas ? ' · à vista (PIX ou 15 dd) ' + r.avistas[0].desc + '% de desconto' : '') + ' · duplicata mínima ' + fmt(r.minDup) + ' · prazos até 105/120 dias só acima de ' + fmt(5000) + '</div></div>');
 }
 /* parcelas do prazo escolhido (ex.: 30/60/90 → 3 parcelas iguais; centavos na última) */
 function parcelasDe(p){
@@ -295,13 +371,20 @@ function acharItem(gid, cod){
   return null;
 }
 /* preço de tabela + desconto aplicado (ex.: 12+10+10%) */
-var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]], avs: [[10,5]] };
+var FATOR_TAB = { michael: 0.645, dreamer: 0.9 }; // Michael 14% + 25% · Dreamer 10%
+var CADEIAS = { dylan: [[12,10,10],[12,10,15],[12,10,20],[12,10],[12]], avs: [[10,5]], michael: [[14,25]], dreamer: [[10]] };
 function numBR(x){ return String(Math.round(x*10)/10).replace('.', ','); }
 function precoInfo(p, it){
   if (it.base != null && p.desc_avista){
     var pb = precoInfo(p, { cod: it.cod, unit: it.base, label: it.label }), extra = p.desc_avista + '% à vista';
     if (!pb.tab) return { tab: r2(it.base), desc: extra };
     return { tab: pb.tab, desc: pb.desc === 'sem desconto' ? extra : pb.desc + ' + ' + extra };
+  }
+  var dpi = it.base == null ? dinPreco(p, it) : null;
+  if (dpi && Math.abs(r2(dpi.u) - r2(it.unit)) < 0.011){
+    if (dpi.d) return { tab: r2(dpi.tab), desc: dpi.d };
+    var rt = it.unit / dpi.tab, chd = (CADEIAS[p.grupo] || []).find(function(c){ return Math.abs(c.reduce(function(m, x){ return m * (1 - x/100); }, 1) - rt) < 0.0015; });
+    return { tab: r2(dpi.tab), desc: Math.abs(rt - 1) < 0.0006 ? 'sem desconto' : chd ? chd.join('+') + '%' : numBR((1 - rt) * 100) + '%' };
   }
   if (p.grupo === 'ziron' && zironTab(it) != null){
     var zt = zironTab(it), zp = zironPromo(it, zironNums(p)), zav = p.desc_ziron ? p.desc_ziron.av : 0, zesp = r2(r2(zp.u) * (1 - zav/100));
@@ -321,6 +404,7 @@ function precoInfo(p, it){
     var o = a.it.o && a.it.o[pid], cp = a.it.p[pid];
     if (p.grupo === 'equipo'){ d = /^18/.test(pid) ? 18 : 15; var base = o || cp; if (base != null) tab = base / (1 - d/100); }
     else if (o) tab = o;
+    else if (FATOR_TAB[p.grupo] && cp != null && !(a.it.tag && /promo|oferta/i.test(a.it.tag))) tab = cp / FATOR_TAB[p.grupo];
   }
   if (!tab || !(unit >= 0)) return { tab: null, desc: '' };
   tab = r2(tab);
@@ -337,7 +421,7 @@ function precoInfo(p, it){
   return { tab: tab, desc: desc };
 }
 /* preço de tabela (cheio) de um item do catálogo na política escolhida */
-var FATOR_TAB = { michael: 0.645 }; // 14% + 25%
+
 function tabelaDe(gid, pid, it){
   var pr = it.p && it.p[pid], o = it.o && it.o[pid];
   if (gid === 'equipo'){ var d = /^18/.test(pid) ? 18 : 15, b = o || pr; return b != null ? r2(b / (1 - d/100)) : null; }
@@ -727,8 +811,10 @@ function ligarItens(travado){
   $app.querySelectorAll('.it').forEach(function(row){
     var i = +row.dataset.i, it = ED.p.itens[i]; if (!it || it.taxa) return;
     var upd = function(){ ED.sujo = true;
+      var uAnt = JSON.stringify(ED.p.itens.map(function(x){ return [x.qty, x.unit]; }));
       var bAnt = JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct, ED.p.itens.length]);
       if (aplicarPreco(ED.p)){ if (bAnt !== JSON.stringify([ED.p.desc_solez && ED.p.desc_solez.base, ED.p.desc_prog && ED.p.desc_prog.pct, ED.p.itens.length])){ telaEditor(); return; } $app.querySelectorAll('.it[data-i]').forEach(function(rw){ var x = ED.p.itens[+rw.dataset.i]; if (!x) return; var pi2 = rw.querySelector('[data-u]'); if (pi2) pi2.value = String(r2(x.unit).toFixed(2)).replace('.', ','); var l2 = rw.querySelector('.lt'); if (l2) l2.textContent = fmt(r2(x.qty*x.unit)); }); }
+      if (uAnt !== JSON.stringify(ED.p.itens.map(function(x){ return [x.qty, x.unit]; })) && !(regraDe(ED.p.grupo) && (regraDe(ED.p.grupo).progressivo || regraDe(ED.p.grupo).solez || regraDe(ED.p.grupo).ziron))){ telaEditor(); return; }
       var lt = row.querySelector('.lt'); lt.textContent = fmt(r2(it.qty*it.unit)); document.getElementById('eTot').textContent = fmt(totalItens(ED.p.itens)); atualizaRegra(); };
     row.querySelector('[data-dec]').onclick = function(){ if (it.qty > 1){ it.qty--; row.querySelector('[data-q]').value = it.qty; upd(); } };
     row.querySelector('[data-inc]').onclick = function(){ it.qty++; row.querySelector('[data-q]').value = it.qty; upd(); };
@@ -822,7 +908,7 @@ function abrirCatalogo(){
     return '<div class="cat-it' + (av ? '' : ' unav') + '"><img src="' + esc(it.img || 'company.png') + '" loading="lazy" alt="" onerror="this.src=\'company.png\'"><div>' +
       '<div><b>' + esc(it.cod) + '</b>' + (it.tag ? '<span class="tag">' + esc(it.tag) + '</span>' : '') + (av ? '' : '<span class="tag ind">INDISPONÍVEL</span>') + (q ? ' <span class="muted" style="font-size:12px">· ' + esc(x.m.nome) + '</span>' : '') + '</div>' +
       '<div class="muted" style="font-size:13px">' + esc(it.desc) + '</div>' +
-      '<div class="pr pr-val">' + precoComTabela(g.id, pid, it) + '</div>' +
+      '<div class="pr pr-val">' + precoComTabela(g.id, pid, it) + '</div>' + promoDica(g, it) +
       '<div class="opts" data-k="' + esc(it.k) + '" data-om="' + x.m.id + '">' + opts + '</div></div></div>';
   }
   function desenha(){
