@@ -401,7 +401,7 @@ function carregarPerfil(){
 function souAdmin(){ return S.perfil && S.perfil.papel === 'admin'; }
 
 /* ---------- topo / navegação ---------- */
-function rota(){ var h = location.hash.replace(/^#\/?/, ''); var p = h.split('/'); return { nome: p[0] || 'pedidos', arg: p.slice(1).join('/') }; }
+function rota(){ var h = location.hash.replace(/^#\/?/, ''); var p = h.split('/'); return { nome: p[0] || 'desempenho', arg: p.slice(1).join('/') }; }
 function topo(){
   var el = document.getElementById('syncPill'); if (!el) return;
   var n = S.fila.length + S.cfila.length, on = navigator.onLine;
@@ -412,7 +412,7 @@ function topo(){
 function casca(conteudo, acoes){
   var r = rota().nome;
   var nAl = emailsAlerta().length;
-  var tabs = [['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['produtos','Produtos'],['representadas','Representadas'],['transportadoras','Transportadoras'],['desempenho','Desempenho'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
+  var tabs = [['desempenho','Desempenho'],['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['produtos','Produtos'],['representadas','Representadas'],['transportadoras','Transportadoras'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
@@ -440,7 +440,7 @@ function telaLogin(msg){
     ev.preventDefault();
     var b = document.getElementById('lBtn'); b.disabled = true; b.textContent = 'Entrando…';
     login(document.getElementById('lEmail').value.trim(), document.getElementById('lSenha').value)
-      .then(carregarPerfil).then(function(){ location.hash = '#pedidos'; return sincronizar(); })
+      .then(carregarPerfil).then(function(){ location.hash = '#desempenho'; return sincronizar(); })
       .catch(function(e){ S.sess = null; lsSet('cv_sess', null); telaLogin(e.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : e.message); });
   };
 }
@@ -492,7 +492,7 @@ function telaNovaSenha(msg){
         S.recup = null;
         guardarSessao({ access_token: rc.access_token, refresh_token: rc.refresh_token, expires_in: rc.expires_in, user: { id: u.id, email: u.email } });
         S.perfil = null; toast('Senha alterada com sucesso!', 4000);
-        return carregarPerfil().then(function(){ location.hash = '#pedidos'; render(); return sincronizar(); });
+        return carregarPerfil().then(function(){ location.hash = '#desempenho'; render(); return sincronizar(); });
       })
       .catch(function(e){ var m = String(e.message || e);
         if (/expired|invalid|jwt|401|403/i.test(m)){ S.recup = null; telaEsqueci('', 'O link de recuperação expirou. Peça um novo link abaixo.'); return; }
@@ -2033,7 +2033,8 @@ function render(){
   if (r.nome === 'produtos') return telaProdutos(r.arg);
   if (r.nome === 'transportadoras') return telaTransportadoras(r.arg);
   if (r.nome === 'mais') return telaMais();
-  return telaPedidos();
+  if (r.nome === 'pedidos') return telaPedidos();
+  return telaDesempenho();
 }
 var voltando = false;
 window.addEventListener('hashchange', function(){
@@ -2052,6 +2053,8 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden &
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function(){});
 
+/* ao abrir o programa, sempre começa na tela Desempenho (padrão desde 26/11/2026); link direto de um pedido (#pedido/…) continua abrindo o pedido */
+(function(){ var h = location.hash.replace(/^#\/?/, ''); if (!/^pedido\/./.test(h) && !/(^|&)(access_token|error)=/.test(h)) history.replaceState(null, '', location.pathname + location.search + '#desempenho'); })();
 Promise.all([kvGet('pedidos'), kvGet('clientes'), kvGet('fila'), carregarCatalogo(), kvGet('cfila'), kvGet('representadas'), kvGet('emails'), kvGet('transportadoras')]).then(function(r){
   S.reps = r[5] || []; S.emails = r[6] || []; S.transps = r[7] || [];
   S.pedidos = r[0] || {}; S.clientes = r[1] || []; S.fila = r[2] || []; S.cfila = r[4] || [];
