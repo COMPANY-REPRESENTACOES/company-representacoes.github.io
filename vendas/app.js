@@ -623,7 +623,7 @@ function telaEditor(){
       '<div><label class="lb">Status</label><select class="in" id="eSt">' + (STATUS_NOME[p.status] && !STATUS.some(function(s){ return s[0] === p.status; }) ? '<option value="' + p.status + '" selected>' + STATUS_NOME[p.status] + ' (antigo)</option>' : '') + STATUS.map(function(s){ return '<option value="' + s[0] + '"' + (p.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>' +
       '<div><label class="lb">Política de preço</label><select class="in" id="ePol"' + (itTrav ? ' disabled title="Toque em Editar itens para mudar a política"' : '') + '>' + (g ? g.politicas.map(function(x){ return '<option value="' + x.id + '"' + (politicaId(p.grupo, p.politica) === x.id ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('') : '<option>' + esc(p.politica) + '</option>') + '</select></div>' +
       '<div><label class="lb">Cliente / razão social</label><input class="in" data-c="name" value="' + esc(c.name) + '"></div>' +
-      '<div><label class="lb">CNPJ / CPF</label><input class="in" data-c="doc" inputmode="numeric" value="' + esc(c.doc) + '"></div>' +
+      '<div><label class="lb">CNPJ / CPF</label><input class="in" data-c="doc" inputmode="numeric" placeholder="00.000.000/0000-00" value="' + esc(fmtDoc(c.doc)) + '"></div>' +
       '<div><label class="lb">Telefone / WhatsApp</label><input class="in" data-c="phone" type="tel" value="' + esc(c.phone) + '"></div>' +
       '<div><label class="lb">Cidade / UF</label><input class="in" data-c="city" value="' + esc(c.city) + '"></div>' +
       '<div><label class="lb">Transportadora</label><input class="in" data-c="carrier" list="trL" autocomplete="off" placeholder="Digite para buscar" value="' + esc(c.carrier) + '">' + trDatalist() + '</div>' +
@@ -723,7 +723,7 @@ function salvarPedido(){
 }
 function verOriginal(){
   var o = ED.p.original || {}, c = o.cliente || {};
-  modal('O que o cliente enviou', '<div class="kv"><span>Cliente</span><span>' + esc(c.name) + '</span><span>CNPJ/CPF</span><span>' + esc(c.doc) + '</span><span>Prazo</span><span>' + esc(o.prazo || '—') + '</span><span>Obs.</span><span>' + esc(o.obs || '—') + '</span></div>' +
+  modal('O que o cliente enviou', '<div class="kv"><span>Cliente</span><span>' + esc(c.name) + '</span><span>CNPJ/CPF</span><span>' + esc(fmtDoc(c.doc)) + '</span><span>Prazo</span><span>' + esc(o.prazo || '—') + '</span><span>Obs.</span><span>' + esc(o.obs || '—') + '</span></div>' +
     '<table class="tb" style="margin-top:12px"><tr><th>Código</th><th>Descrição</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th></tr>' +
     (o.itens || []).map(function(i){ return '<tr><td><b>' + esc(i.cod) + '</b></td><td>' + esc(i.desc) + (i.label ? ' · ' + esc(i.label) : '') + '</td><td class="r">' + i.qty + '</td><td class="r">' + fmt(i.unit) + '</td><td class="r">' + fmt(i.qty*i.unit) + '</td></tr>'; }).join('') +
     '<tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>' + fmt(o.total) + '</b></td></tr></table>');
@@ -856,7 +856,7 @@ function telaNovo(arg){
   var vend = souAdmin() ? Object.keys(CFG.vendedores) : [S.perfil.codigo];
   var html = '<h1>Novo pedido</h1><div class="card pad">' +
     '<label class="lb">Cliente</label><input class="in" id="nCli" list="cliL" placeholder="Digite o nome ou CNPJ de um cliente cadastrado, ou um cliente novo" value="' + esc(pre ? pre.nome : '') + '">' +
-    '<datalist id="cliL">' + S.clientes.map(function(c){ return '<option value="' + esc(c.nome) + '">' + esc((c.doc||'') + ' ' + (c.cidade||'')) + '</option>'; }).join('') + '</datalist>' +
+    '<datalist id="cliL">' + S.clientes.map(function(c){ return '<option value="' + esc(c.nome) + '">' + esc(fmtDoc(c.doc) + ' ' + (c.cidade||'')) + '</option>'; }).join('') + '</datalist>' +
     '<label class="lb">Representada</label><select class="in" id="nG"><option value="">Selecione</option>' + S.cat.grupos.slice().sort(function(a, b){ return a.nome.localeCompare(b.nome, 'pt-BR'); }).map(function(g){ return '<option value="' + g.id + '">' + esc(g.nome) + '</option>'; }).join('') + '</select>' +
     '<label class="lb">Política de preço</label><select class="in" id="nPol"></select>' +
     (vend.length > 1 ? '<label class="lb">Vendedor</label><select class="in" id="nVend">' + vend.map(function(k){ return '<option value="' + k + '">' + esc(CFG.vendedores[k]) + '</option>'; }).join('') + '</select>' : '') +
@@ -1234,7 +1234,7 @@ function montarPdf(p, modo){
   doc.rect(M, y, CW, boxH, null, LINE, 0.8); doc.rect(M, y, CW, 18, SOFT); doc.line(M, y+18, M+CW, y+18, LINE, 0.8);
   doc.text(M + 10, y + 12.5, 'DADOS DO CLIENTE', { size: 8, bold: true, color: RED });
   field(fx, fy, 'Cliente / Razão social', c.name, 2*colW - 10); field(fx + 2*colW, fy, 'Prazo de pagamento', p.prazo, colW - 10); fy += 28;
-  field(fx, fy, 'CNPJ / CPF', c.doc, colW - 10); field(fx + colW, fy, 'Telefone / WhatsApp', c.phone, colW - 10); field(fx + 2*colW, fy, 'Cidade / UF', c.city, colW - 10); fy += 28;
+  field(fx, fy, 'CNPJ / CPF', fmtDoc(c.doc), colW - 10); field(fx + colW, fy, 'Telefone / WhatsApp', c.phone, colW - 10); field(fx + 2*colW, fy, 'Cidade / UF', c.city, colW - 10); fy += 28;
   field(fx, fy, 'Transportadora', c.carrier, colW - 10);
   field(fx + colW, fy, 'Representante', 'Company Representações · ' + (CFG.vendedores[p.vendedor_codigo] || '') + ' ' + (CFG.fones[p.vendedor_codigo] || ''), 2*colW - 10);
   y += boxH + 16;
@@ -2108,3 +2108,28 @@ document.addEventListener('click', function(e){
   abrirZoom(src, [cod && cod.textContent, ds && ds.textContent].filter(Boolean).join(' · '), preco);
 }, true);
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && document.getElementById('zoomFoto')){ e.stopPropagation(); fecharZoom(); } }, true);
+
+/* PX-CNPJ-MASK: todo campo de CNPJ no padrão 00.000.000/0000-00 (CPF 000.000.000-00 com 11 números) */
+(function(){
+  var SEL = '#cf_doc, #rCnpj, [data-c="doc"], .cnpj-mask';
+  function fmtCnpjDig(d){ d = String(d||'').replace(/\D/g,'').slice(0,14); var r = d.slice(0,2);
+    if (d.length > 2) r += '.' + d.slice(2,5); if (d.length > 5) r += '.' + d.slice(5,8);
+    if (d.length > 8) r += '/' + d.slice(8,12); if (d.length > 12) r += '-' + d.slice(12,14); return r; }
+  function eh(t){ return t && t.matches && t.matches(SEL); }
+  document.addEventListener('input', function(ev){
+    var el = ev.target; if (!eh(el) || el.__pxSkip) return;
+    el.setAttribute('maxlength', '18');
+    var pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+    var antes = el.value.slice(0, pos).replace(/\D/g,'').length;
+    var nv = fmtCnpjDig(el.value); if (nv === el.value) return; el.value = nv;
+    var i = 0, n = 0; while (i < nv.length && n < antes){ if (/\d/.test(nv[i])) n++; i++; }
+    try { el.setSelectionRange(i, i); } catch(e){}
+  }, true);
+  document.addEventListener('focusout', function(ev){
+    var el = ev.target; if (!eh(el)) return;
+    var nv = fmtDoc(el.value); if (nv === el.value) return;
+    el.value = nv; el.__pxSkip = 1;
+    try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch(e){}
+    el.__pxSkip = 0;
+  }, true);
+})();

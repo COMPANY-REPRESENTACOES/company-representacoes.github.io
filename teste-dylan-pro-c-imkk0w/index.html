@@ -2869,4 +2869,29 @@
 })();
 </script>
 <!-- /PX-CATS-WRAP -->
+<!-- PX-CNPJ-MASK: CNPJ no padrão 00.000.000/0000-00 (CPF 000.000.000-00 com 11 números) -->
+<script>
+(function(){
+  function fmtCnpj(d){ d = String(d||'').replace(/\D/g,'').slice(0,14); var r = d.slice(0,2);
+    if (d.length > 2) r += '.' + d.slice(2,5); if (d.length > 5) r += '.' + d.slice(5,8);
+    if (d.length > 8) r += '/' + d.slice(8,12); if (d.length > 12) r += '-' + d.slice(12,14); return r; }
+  function fmtFinal(v){ var d = String(v||'').replace(/\D/g,'');
+    if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4'); return fmtCnpj(d); }
+  function liga(el){
+    if (!el || el.__pxMask) return; el.__pxMask = 1; el.setAttribute('maxlength', '18'); el.setAttribute('inputmode', 'numeric');
+    if (!el.getAttribute('placeholder')) el.setAttribute('placeholder', '00.000.000/0000-00');
+    el.addEventListener('input', function(){
+      var pos = el.selectionStart == null ? el.value.length : el.selectionStart;
+      var antes = el.value.slice(0, pos).replace(/\D/g,'').length;
+      var nv = fmtCnpj(el.value); if (nv === el.value) return; el.value = nv;
+      var i = 0, n = 0; while (i < nv.length && n < antes){ if (/\d/.test(nv[i])) n++; i++; }
+      try { el.setSelectionRange(i, i); } catch(e){}
+    });
+    el.addEventListener('blur', function(){ el.value = fmtFinal(el.value); });
+    if (el.value) el.value = fmtFinal(el.value);
+  }
+  function init(){ liga(document.getElementById('clientDoc')); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
 </body></html>
