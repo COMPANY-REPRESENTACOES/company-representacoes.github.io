@@ -71,7 +71,35 @@ function aplicarTaxa(p){
   if (merc.length && liq < tx.abaixo){ if (!temTaxa) p.itens.push({ cod: tx.cod, desc: tx.desc, qty: 1, unit: tx.valor, label: '', marca: '', taxa: true }); }
   else if (temTaxa) p.itens = p.itens.filter(function(it){ return !it.taxa; });
 }
-function aplicarPreco(p){ return aplicarSolez(p) || aplicarProg(p); }
+/* Ziron: promoções iguais ao Pedido Express Ziron (pedais, Divitone, desconto por quantidade) + à vista 5% */
+REGRAS.ziron = { ziron: true,
+  pedal: { codes: ['IMPULSE R','CAMALEON AMP','DELOREAN DELAY','ALIEN REVERB'], min: 10, unit: 160 },
+  div: { codes: ['DSG-CY','DSG-10PK','DSG-10BL','DSG10-NF','DSG10-AO','DAM 10-WH','DAM 10-BK'], min: 5000, pct: 5 },
+  qty: { 'DRUM LOOP': [[5, 340], [10, 320]], 'ZIRON WSM': [[5, 312.55], [10, 302.68], [15, 286.23], [20, 273.07]] },
+  avistas: [ { nome: 'À vista (5% de desconto)', desc: 5 } ] };
+function zironTab(it){ var c = catTab('ziron', it); return c && c.tab != null ? c.tab : null; }
+function zironNums(p){
+  var r = REGRAS.ziron, pq = 0, dg = 0;
+  p.itens.forEach(function(it){ var t = zironTab(it); if (r.pedal.codes.indexOf(it.cod) > -1) pq += it.qty; if (t != null && r.div.codes.indexOf(it.cod) > -1) dg += t * it.qty; });
+  return { pq: pq, dg: r2(dg), pedalOk: pq >= r.pedal.min, divOk: dg >= r.div.min };
+}
+function zironTier(it){ var t = REGRAS.ziron.qty[it.cod], cur = null, next = null; (t || []).forEach(function(x){ if (it.qty >= x[0]) cur = x; else if (!next) next = x; }); return { cur: cur, next: next }; }
+/* preço promocional (sem o à vista) e o nome da promoção aplicada */
+function zironPromo(it, n){
+  var r = REGRAS.ziron, t = zironTab(it); if (t == null) return null;
+  if (r.qty[it.cod]){ var tq = zironTier(it); return tq.cur ? { u: tq.cur[1], d: 'Promoção ' + tq.cur[0] + '+ pç' } : { u: t, d: '' }; }
+  if (r.pedal.codes.indexOf(it.cod) > -1) return n.pedalOk ? { u: r.pedal.unit, d: 'Promoção pedais 10+' } : { u: t, d: '' };
+  if (r.div.codes.indexOf(it.cod) > -1) return n.divOk ? { u: r2(t * (1 - r.div.pct/100)), d: r.div.pct + '% Divitone' } : { u: t, d: '' };
+  return { u: t, d: '' };
+}
+function aplicarZiron(p){
+  if (p.grupo !== 'ziron') return false;
+  var n = zironNums(p), a = avistaDe(p), av = a ? a.desc : 0;
+  p.itens.forEach(function(it){ var pr = zironPromo(it, n); if (!pr) return; it.unit = r2(r2(pr.u) * (1 - av/100)); delete it.base; });
+  p.desc_ziron = { av: av }; delete p.desc_avista;
+  return true;
+}
+function aplicarPreco(p){ return aplicarSolez(p) || aplicarProg(p) || aplicarZiron(p); }
 function regraDe(gid){ return REGRAS[gid] || null; }
 function nParcelas(pz){ return String(pz).split('/').length; }
 /* devolve '' se o prazo vale para esse total, ou o motivo se não vale */
@@ -86,7 +114,7 @@ function eAvista(p){ return !!avistaDe(p); }
 function totBruto(p){ return r2(p.itens.reduce(function(s, i){ return s + r2(i.qty * (i.base != null ? i.base : i.unit)); }, 0)); }
 /* aplica ou tira o desconto à vista no preço de cada item (guarda o preço sem desconto em it.base) */
 function aplicarAvista(p){
-  var rr = regraDe(p.grupo); if (rr && rr.progressivo) return;
+  var rr = regraDe(p.grupo); if (rr && (rr.progressivo || rr.ziron)) return;
   var a = avistaDe(p), d = a ? a.desc : 0;
   p.itens.forEach(function(it){
     if (d){ if (it.base == null) it.base = it.unit; it.unit = r2(it.base * (1 - d/100)); }
@@ -97,6 +125,7 @@ function aplicarAvista(p){
 /* avisos das regras: [] quando está tudo certo */
 function avisosRegra(p){
   var r = regraDe(p.grupo); if (!r) return [];
+  if (r.ziron) return [];
   if (r.solez) return p.prazo && r.prazosDesc.some(function(x){ return x[0] === p.prazo; }) ? [] : ['Escolha o prazo de pagamento para aplicar o desconto de prazo.'];
   var pn = r.progressivo ? progNums(p) : null, tot = pn ? pn.bruto : totBruto(p), totD = pn ? pn.final : tot, av = [];
   if (r.minimo && tot < r.minimo) av.push('Pedido mínimo ' + fmt(r.minimo) + ' (faltam ' + fmt(r2(r.minimo - tot)) + ').');
@@ -108,6 +137,10 @@ function confereRegra(p, acao){ var av = avisosRegra(p); return !av.length || co
 function prazoCampo(p, travado){
   var r = regraDe(p.grupo);
   if (!r) return '<input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"><datalist id="prazosL">' + PRAZOS.map(function(x){ return '<option value="' + x + '">'; }).join('') + '</datalist>';
+  if (r.ziron){
+    var zl = r.avistas.map(function(a){ return a.nome; }).concat(PRAZOS.filter(function(x){ return x !== 'À vista'; }));
+    return '<input class="in" id="ePrazo" list="prazosL" value="' + esc(p.prazo) + '"' + (travado ? ' disabled' : '') + '><datalist id="prazosL">' + zl.map(function(x){ return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>';
+  }
   if (r.solez){
     var os = '<option value="">Selecione o prazo (aplica o desconto de prazo)</option>', achou = false;
     r.prazosDesc.forEach(function(x){ if (p.prazo === x[0]) achou = true; os += '<option value="' + esc(x[0]) + '"' + (p.prazo === x[0] ? ' selected' : '') + '>' + esc(x[0]) + ' — desconto de prazo ' + x[1] + '%</option>'; });
@@ -123,6 +156,16 @@ function prazoCampo(p, travado){
 }
 function regraBox(p){
   var r = regraDe(p.grupo); if (!r) return '';
+  if (r.ziron){
+    var zn = zironNums(p), za = avistaDe(p), zh = [];
+    if (zn.pq) zh.push(zn.pedalOk ? '<div class="rl"><span>✓ Pedais a ' + fmt(r.pedal.unit) + ' aplicado (' + zn.pq + ' pç)</span></div>' : '<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + (r.pedal.min - zn.pq) + ' pedal(is) para ' + fmt(r.pedal.unit) + ' cada</div>');
+    if (zn.dg) zh.push(zn.divOk ? '<div class="rl"><span>✓ Divitone ' + r.div.pct + '% OFF aplicado</span><span>Divitone em tabela ' + fmt(zn.dg) + '</span></div>' : '<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + fmt(r2(r.div.min - zn.dg)) + ' em Divitone para ' + r.div.pct + '% OFF</div>');
+    p.itens.forEach(function(it){ if (!r.qty[it.cod]) return; var tq = zironTier(it);
+      if (tq.cur) zh.push('<div class="rl"><span>✓ ' + esc(it.cod) + ' a ' + fmt(tq.cur[1]) + ' (' + it.qty + ' pç)</span></div>');
+      if (tq.next) zh.push('<div class="ri" style="color:#b42318;font-weight:700">Faltam ' + (tq.next[0] - it.qty) + ' ' + esc(it.cod) + ' para ' + fmt(tq.next[1]) + ' cada</div>'); });
+    if (za) zh.push('<div class="rl"><span>✓ Desconto à vista ' + za.desc + '% aplicado nos itens</span></div>');
+    return '<div class="regra">' + zh.join('') + '<div class="ri">Promoções Ziron (iguais ao Pedido Express): pedais Impulse R, Camaleon, Delorean e Alien a ' + fmt(r.pedal.unit) + ' cada a partir de ' + r.pedal.min + ' peças · Divitone (guitarras DSG e amps DAM 10) ' + r.div.pct + '% OFF acima de ' + fmt(r.div.min) + ' em Divitone · Drum Loop 5+ ' + fmt(340) + ', 10+ ' + fmt(320) + ' · Monitor WSM 5+ ' + fmt(312.55) + ', 10+ ' + fmt(302.68) + ', 15+ ' + fmt(286.23) + ', 20+ ' + fmt(273.07) + ' · à vista +5% OFF.</div></div>';
+  }
   if (r.solez){
     var n = solezNums(p), av2 = avisosRegra(p);
     return '<div class="regra"><div class="rl"><span>Desc. valor de pedido ' + n.base + '%' + (n.term ? ' + desc. prazo ' + n.term + '%' : '') + '</span><span>bruto em tabela ' + fmt(n.bruto) + '</span></div>' +
@@ -259,6 +302,10 @@ function precoInfo(p, it){
     var pb = precoInfo(p, { cod: it.cod, unit: it.base, label: it.label }), extra = p.desc_avista + '% à vista';
     if (!pb.tab) return { tab: r2(it.base), desc: extra };
     return { tab: pb.tab, desc: pb.desc === 'sem desconto' ? extra : pb.desc + ' + ' + extra };
+  }
+  if (p.grupo === 'ziron' && zironTab(it) != null){
+    var zt = zironTab(it), zp = zironPromo(it, zironNums(p)), zav = p.desc_ziron ? p.desc_ziron.av : 0, zesp = r2(r2(zp.u) * (1 - zav/100));
+    if (Math.abs(zesp - r2(it.unit)) < 0.011){ var zparts = []; if (zp.d) zparts.push(zp.d); if (zav) zparts.push(zav + '% à vista'); return { tab: r2(zt), desc: zparts.length ? zparts.join(' + ') : 'sem desconto' }; }
   }
   if (p.grupo === 'solez' && p.desc_solez && solezTab(it, true) != null){
     var tcheia = solezTab(it, true), tbf = solezTab(it), ds = p.desc_solez, esp = r2(tbf * (1 - ds.base/100) * (1 - ds.term/100));
@@ -639,7 +686,7 @@ function telaEditor(){
   casca(html, acoes);
   var marcar = function(){ ED.sujo = true; };
   $app.querySelectorAll('[data-c]').forEach(function(inp){ inp.oninput = function(){ ED.p.cliente = ED.p.cliente || {}; ED.p.cliente[inp.dataset.c] = inp.value; marcar(); }; });
-  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (aplicarPreco(ED.p)){ telaEditor(); return; } if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
+  document.getElementById('ePrazo').oninput = document.getElementById('ePrazo').onchange = function(){ var antes = eAvista(ED.p); ED.p.prazo = this.value; marcar(); if (ED.p.grupo === 'ziron'){ aplicarPreco(ED.p); if (antes !== eAvista(ED.p)) telaEditor(); else atualizaRegra(); return; } if (aplicarPreco(ED.p)){ telaEditor(); return; } if (regraDe(ED.p.grupo) && (antes || eAvista(ED.p))){ aplicarAvista(ED.p); telaEditor(); } else atualizaRegra(); };
   document.getElementById('eObs').oninput = function(){ ED.p.obs = this.value; marcar(); };
   document.getElementById('eSt').onchange = function(){ ED.p.status = this.value; marcar(); telaEditor(); };
   document.getElementById('ePol').onchange = function(){ trocarPolitica(this.value); };
