@@ -1567,7 +1567,8 @@ var MESES_N = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ag
 var COR_S = ['#2a78d6', '#eb6834', '#1baf7a'];
 function isoDia(d){ return d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate()); }
 function valorPed(p){ var t = +p.total; return t > 0 ? t : totalItens(p.itens || []); }
-function fmtK(v){ return v >= 1e6 ? (Math.round(v/1e5)/10).toString().replace('.', ',') + ' mi' : v >= 1e3 ? Math.round(v/1e3) + ' mil' : String(Math.round(v)); }
+var DZ_OC = true;
+function fmtK(v){ if (DZ_OC) return '•••'; return v >= 1e6 ? (Math.round(v/1e5)/10).toString().replace('.', ',') + ' mi' : v >= 1e3 ? Math.round(v/1e3) + ' mil' : String(Math.round(v)); }
 function escala(max){ if (max <= 0) return [0, 1, 2, 3, 4]; var p = Math.pow(10, Math.floor(Math.log10(max/4))), st = [1,2,2.5,5,10].map(function(m){ return m*p; }).find(function(x){ return x*4 >= max; }) || p*10; return [0,1,2,3,4].map(function(i){ return i*st; }); }
 /* barras verticais; grupos = [{rot, vals:[...]}], series = nomes */
 function svgBarras(grupos, series, fmtV, cores){
@@ -1598,6 +1599,8 @@ function telaDesempenho(){
   var hoje = new Date();
   S.fDe = S.fDe || { de: isoDia(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: isoDia(new Date(hoje.getFullYear(), hoje.getMonth()+1, 0)), vend: '', per: 'mes' };
   var f = S.fDe, admin = souAdmin(), meu = S.perfil && S.perfil.codigo;
+  /* valores ocultos ao abrir (padrão desde 26/11/2026): só aparecem tocando em "Mostrar valores" */
+  DZ_OC = !S.dzVer; var fv = DZ_OC ? function(){ return 'R$ •••••'; } : fmt;
   var base = listaPedidos().filter(function(p){ return p.status !== 'cancelado' && (admin ? (!f.vend || p.vendedor_codigo === f.vend) : p.vendedor_codigo === meu); });
   var dia = function(p){ return isoDia(new Date(p.criado_em)); };
   var d0 = new Date(f.de + 'T00:00:00'), d1 = new Date(f.ate + 'T00:00:00'), ndias = Math.round((d1 - d0)/864e5) + 1;
@@ -1647,24 +1650,24 @@ function telaDesempenho(){
     return o;
   }
   var maxRep = porRep.length ? porRep[0].v : 1, maxCli = porCli.length ? porCli[0].v : 1, maxSt = Math.max.apply(null, stOrd.map(function(x){ return nSt[x[0]] || 0; }).concat([1]));
-  var html = '<div class="dz">' +
-    '<div class="dz-top"><div><h1>Desempenho</h1><div class="dz-sub">' + dataBR(f.de + 'T12:00').slice(0,8) + ' a ' + dataBR(f.ate + 'T12:00').slice(0,8) + ' · comparado com ' + dataBR(pDe + 'T12:00').slice(0,8) + ' a ' + dataBR(pAte + 'T12:00').slice(0,8) + '</div></div>' +
+  var html = '<div class="dz' + (DZ_OC ? ' oculto' : '') + '">' +
+    '<div class="dz-top"><div><h1>Desempenho <button type="button" class="dz-olho" id="dzOlho" title="' + (DZ_OC ? 'Mostrar os valores' : 'Ocultar os valores') + '">' + (DZ_OC ? '👁 Mostrar valores' : '🙈 Ocultar valores') + '</button></h1><div class="dz-sub">' + dataBR(f.de + 'T12:00').slice(0,8) + ' a ' + dataBR(f.ate + 'T12:00').slice(0,8) + ' · comparado com ' + dataBR(pDe + 'T12:00').slice(0,8) + ' a ' + dataBR(pAte + 'T12:00').slice(0,8) + '</div></div>' +
       '<div class="dz-ctl"><div class="dz-seg">' + [['mes','Este mês'],['ant','Mês passado'],['tri','3 meses'],['ano','Ano']].map(function(o){ return '<button data-per="' + o[0] + '" class="' + (f.per === o[0] ? 'on' : '') + '">' + o[1] + '</button>'; }).join('') + '</div>' +
       '<input class="in dz-dt" type="date" id="dDe" value="' + f.de + '"><span class="muted">→</span><input class="in dz-dt" type="date" id="dAte" value="' + f.ate + '">' +
       (admin ? '<select class="in dz-dt" id="dVend"><option value="">Todos vendedores</option>' + Object.keys(CFG.vendedores).map(function(k){ return '<option value="' + k + '"' + (f.vend === k ? ' selected' : '') + '>' + esc(CFG.vendedores[k]) + '</option>'; }).join('') + '</select>' : '') + '</div></div>' +
     '<div class="dz-kpis">' +
-      '<div class="dz-k hero"><span>Vendas</span><b>' + fmt(R.v) + '</b>' + delta(R.v, A.v) + '<small>antes: ' + fmt(A.v) + '</small></div>' +
+      '<div class="dz-k hero"><span>Vendas</span><b>' + fv(R.v) + '</b>' + delta(R.v, A.v) + '<small>antes: ' + fv(A.v) + '</small></div>' +
       '<div class="dz-k"><span>Pedidos</span><b>' + R.q + '</b>' + delta(R.q, A.q) + '<small>antes: ' + A.q + '</small></div>' +
-      '<div class="dz-k"><span>Ticket médio</span><b>' + (R.q ? fmt(R.t) : '—') + '</b>' + delta(R.t, A.t) + '<small>antes: ' + (A.q ? fmt(A.t) : '—') + '</small></div>' +
+      '<div class="dz-k"><span>Ticket médio</span><b>' + (R.q ? fv(R.t) : '—') + '</b>' + delta(R.t, A.t) + '<small>antes: ' + (A.q ? fv(A.t) : '—') + '</small></div>' +
       '<div class="dz-k"><span>Clientes atendidos</span><b>' + R.c + '</b>' + delta(R.c, A.c) + '<small>antes: ' + A.c + '</small></div>' +
     '</div>' +
     '<div class="dz-grid">' +
       '<div class="dz-c span2"><div class="dz-h"><div><b>Evolução das vendas</b><span>' + (porDia ? 'acumulado no período' : 'por mês') + '</span></div>' + (ptsA ? '<div class="dz-lg"><i class="l1"></i>Este período<i class="l2"></i>Período anterior</div>' : '') + '</div>' + (noPer.length || (ptsA && ant.length) ? area() : vazio) + '</div>' +
-      '<div class="dz-c"><div class="dz-h"><div><b>Top representadas</b><span>participação nas vendas</span></div></div>' + (porRep.length ? '<div class="dz-rank">' + porRep.map(function(x){ var lg = logoRep(x.k); return '<div class="dz-ri">' + (lg ? '<img src="' + esc(lg.url) + '" alt="">' : '<em>' + esc(x.n.replace(/^Grupo /,'').slice(0,2).toUpperCase()) + '</em>') + '<div class="dz-rb"><div class="dz-rl"><span>' + esc(x.n) + '</span><b>' + fmt(x.v) + '</b></div><div class="dz-bar"><i style="width:' + (x.v/maxRep*100) + '%"></i></div><small>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '% · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</small></div></div>'; }).join('') + '</div>' : vazio) + '</div>' +
-      '<div class="dz-c span2"><div class="dz-h"><div><b>Comparativo anual</b><span>' + MESES_N[cm[0]] + ' a ' + MESES_N[cm[2]] + ' em ' + anos.join(', ') + '</span></div></div>' + (comp.some(function(g){ return g.vals.some(function(v){ return v > 0; }); }) ? svgBarras(comp, cm.map(function(mm){ return MESES_N[mm]; }), fmt, COR_S) : vazio) + '</div>' +
+      '<div class="dz-c"><div class="dz-h"><div><b>Top representadas</b><span>participação nas vendas</span></div></div>' + (porRep.length ? '<div class="dz-rank">' + porRep.map(function(x){ var lg = logoRep(x.k); return '<div class="dz-ri">' + (lg ? '<img src="' + esc(lg.url) + '" alt="">' : '<em>' + esc(x.n.replace(/^Grupo /,'').slice(0,2).toUpperCase()) + '</em>') + '<div class="dz-rb"><div class="dz-rl"><span>' + esc(x.n) + '</span><b>' + fv(x.v) + '</b></div><div class="dz-bar"><i style="width:' + (x.v/maxRep*100) + '%"></i></div><small>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '% · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</small></div></div>'; }).join('') + '</div>' : vazio) + '</div>' +
+      '<div class="dz-c span2"><div class="dz-h"><div><b>Comparativo anual</b><span>' + MESES_N[cm[0]] + ' a ' + MESES_N[cm[2]] + ' em ' + anos.join(', ') + '</span></div></div>' + (comp.some(function(g){ return g.vals.some(function(v){ return v > 0; }); }) ? svgBarras(comp, cm.map(function(mm){ return MESES_N[mm]; }), fv, COR_S) : vazio) + '</div>' +
       '<div class="dz-c"><div class="dz-h"><div><b>Pedidos por etapa</b><span>status atual dos pedidos do período</span></div></div>' + (noPer.length ? '<div class="dz-fun">' + stOrd.map(function(x){ var n2 = nSt[x[0]] || 0; return '<div><span>' + esc(x[1]) + '</span><div class="dz-bar fs-' + x[0] + '"><i style="width:' + (n2/maxSt*100) + '%"></i></div><b>' + n2 + '</b></div>'; }).join('') + '</div>' : vazio) + '</div>' +
-      '<div class="dz-c"><div class="dz-h"><div><b>Top clientes</b><span>maiores compras no período</span></div></div>' + (porCli.length ? '<ol class="dz-cli">' + porCli.map(function(x){ return '<li><span>' + esc(x.n) + '</span><b>' + fmt(x.v) + '</b><div class="dz-bar thin"><i style="width:' + (x.v/maxCli*100) + '%"></i></div></li>'; }).join('') + '</ol>' : vazio) + '</div>' +
-      (admin && !f.vend ? '<div class="dz-c"><div class="dz-h"><div><b>Vendedores</b><span>vendas no período</span></div></div>' + (porVend.length ? '<div class="dz-vend">' + porVend.map(function(x){ return '<div><em>' + esc(x.n.slice(0,1)) + '</em><div><b>' + esc(x.n) + '</b><span>' + fmt(x.v) + ' · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</span></div><strong>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '%</strong></div>'; }).join('') + '</div>' : vazio) + '</div>' : '') +
+      '<div class="dz-c"><div class="dz-h"><div><b>Top clientes</b><span>maiores compras no período</span></div></div>' + (porCli.length ? '<ol class="dz-cli">' + porCli.map(function(x){ return '<li><span>' + esc(x.n) + '</span><b>' + fv(x.v) + '</b><div class="dz-bar thin"><i style="width:' + (x.v/maxCli*100) + '%"></i></div></li>'; }).join('') + '</ol>' : vazio) + '</div>' +
+      (admin && !f.vend ? '<div class="dz-c"><div class="dz-h"><div><b>Vendedores</b><span>vendas no período</span></div></div>' + (porVend.length ? '<div class="dz-vend">' + porVend.map(function(x){ return '<div><em>' + esc(x.n.slice(0,1)) + '</em><div><b>' + esc(x.n) + '</b><span>' + fv(x.v) + ' · ' + x.q + ' pedido' + (x.q > 1 ? 's' : '') + '</span></div><strong>' + (R.v ? Math.round(x.v/R.v*100) : 0) + '%</strong></div>'; }).join('') + '</div>' : vazio) + '</div>' : '') +
     '</div><p class="dz-nota">Não conta pedidos cancelados. Cada pedido entra pela data em que foi criado; os do Pedido Express pelo valor enviado pelo cliente (ou o revisado, se você editou).</p></div>';
   casca(html);
   // tooltip da área
@@ -1675,12 +1678,13 @@ function telaDesempenho(){
       var r = svg.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width * g2.W, i = Math.max(0, Math.min(g2.n-1, Math.round((x - g2.L) / g2.iw * (g2.n-1))));
       var z = pts[i], px = g2.X(i), py = g2.Y(z.acc);
       cx.setAttribute('x1', px); cx.setAttribute('x2', px); pt.setAttribute('cx', px); pt.setAttribute('cy', py);
-      tip.innerHTML = '<b>' + z.rot + '</b>' + (porDia ? '<div>No dia: ' + fmt(z.v) + ' · ' + z.q + ' ped.</div><div>Acumulado: <b>' + fmt(z.acc) + '</b></div>' + (ptsA ? '<div class="muted">Período anterior: ' + fmt(ptsA[i].acc) + '</div>' : '') : '<div>' + fmt(z.v) + ' · ' + z.q + ' pedidos</div>');
+      tip.innerHTML = '<b>' + z.rot + '</b>' + (porDia ? '<div>No dia: ' + fv(z.v) + ' · ' + z.q + ' ped.</div><div>Acumulado: <b>' + fv(z.acc) + '</b></div>' + (ptsA ? '<div class="muted">Período anterior: ' + fv(ptsA[i].acc) + '</div>' : '') : '<div>' + fv(z.v) + ' · ' + z.q + ' pedidos</div>');
       tip.style.display = 'block'; var tx = px / g2.W * r.width; var cr = svg.parentNode.getBoundingClientRect(); tip.style.left = (r.left - cr.left + Math.min(Math.max(tx, 80), r.width - 80)) + 'px'; tip.style.top = (r.top - cr.top + py / 260 * r.height - 12) + 'px';
     };
     hit.addEventListener('pointermove', mover); hit.addEventListener('pointerdown', mover);
     hit.addEventListener('pointerleave', function(){ tip.style.display = 'none'; cx.setAttribute('x1', -9); cx.setAttribute('x2', -9); pt.setAttribute('cx', -9); });
   }
+  document.getElementById('dzOlho').onclick = function(){ S.dzVer = !S.dzVer; telaDesempenho(); };
   var set = function(de, ate, per){ f.de = isoDia(de); f.ate = isoDia(ate); f.per = per; telaDesempenho(); };
   document.getElementById('dDe').onchange = function(){ if (this.value){ f.de = this.value; f.per = ''; if (f.ate < f.de) f.ate = f.de; telaDesempenho(); } };
   document.getElementById('dAte').onchange = function(){ if (this.value){ f.ate = this.value; f.per = ''; if (f.de > f.ate) f.de = f.ate; telaDesempenho(); } };
@@ -2020,6 +2024,7 @@ function render(){
   if (!S.sess){ telaLogin(S.syncErr && /Sessão/.test(S.syncErr) ? S.syncErr : ''); return; }
   if (!S.perfil){ casca('<div class="card empty">Carregando seu perfil…</div>'); carregarPerfil().then(render, function(e){ telaLogin(e.message); S.sess = null; lsSet('cv_sess', null); }); return; }
   var r = rota();
+  if (r.nome !== 'desempenho') S.dzVer = false; /* ao sair do Desempenho, os valores voltam a ficar ocultos */
   if (r.nome !== 'pedido' && ED && ED.sujo && !ED.novo){ /* descarta edição não salva ao sair */ }
   if (r.nome !== 'pedido' && r.nome !== 'novo') ED = null;
   if (r.nome === 'pedido') return abrirPedido(r.arg);
@@ -2050,6 +2055,7 @@ window.addEventListener('online', function(){ topo(); sincronizar(); });
 window.addEventListener('offline', topo);
 setInterval(function(){ if (navigator.onLine) sincronizar(); }, 90000);
 document.addEventListener('visibilitychange', function(){ if (!document.hidden && navigator.onLine) sincronizar(); });
+document.addEventListener('visibilitychange', function(){ if (document.hidden && S.dzVer){ S.dzVer = false; if (S.sess && S.perfil && rota().nome === 'desempenho') telaDesempenho(); } });
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(function(){});
 
