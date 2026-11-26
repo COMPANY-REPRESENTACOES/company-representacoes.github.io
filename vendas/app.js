@@ -953,12 +953,48 @@ function telaClientes(arg){
         '<div class="muted" style="font-size:13px">' + esc([fmtDoc(c.doc), [c.cidade, c.uf].filter(Boolean).join('/'), c.telefone].filter(Boolean).join(' · ')) + '</div>' +
         '<div class="muted" style="font-size:12.5px">Última compra: ' + (cp.ult ? dataCurta(cp.ult) : '—') + '</div>' +
         (c._erro ? '<div class="note bad" style="margin:6px 0 0">' + esc(c._erro) + '</div>' : '') + '</div>' +
-        '<div class="row" style="gap:6px"><a class="btn sm" href="#cliente/' + c.id + '">Editar</a><button class="btn sm" data-ver="' + esc(c.nome) + '">' + cp.n + ' pedido(s)</button><a class="btn sm pri" href="#novo/' + c.id + '">Novo pedido</a></div></div></div>';
+        '<div class="row" style="gap:6px"><a class="btn sm" href="#cliente/' + c.id + '">Editar</a><button type="button" class="btn sm btn-del" data-cdel="' + esc(c.id) + '">🗑 Excluir</button><button class="btn sm" data-ver="' + esc(c.nome) + '">' + cp.n + ' pedido(s)</button><a class="btn sm pri" href="#novo/' + c.id + '">Novo pedido</a></div></div></div>';
     }).join('') : '<div class="card empty">' + (S.clientes.length ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.') + '</div>') + '</div>');
   document.getElementById('qCli').onchange = function(){ location.hash = '#clientes/' + encodeURIComponent(this.value); };
   document.getElementById('bFiltro').onclick = function(){ abrirFiltroClientes(arg); };
   var lf = document.getElementById('bLimpaF'); if (lf) lf.onclick = function(){ CF = Object.assign({}, CF_VAZIO); lsSet('cv_cfiltro', CF); telaClientes(arg); };
   $app.querySelectorAll('[data-ver]').forEach(function(b){ b.onclick = function(){ S.filtro = { st:'', org:'', vend:'', q: b.dataset.ver }; location.hash = '#pedidos'; }; });
+  $app.querySelectorAll('[data-cdel]').forEach(function(b){ b.onclick = function(e){ e.preventDefault(); confirmarExcluirCliente(b.dataset.cdel, arg); }; });
+}
+/* excluir cliente (com confirmação) */
+function confirmarExcluirCliente(id, arg){
+  var c = S.clientes.find(function(x){ return x.id === id; }); if (!c) return;
+  var cp = compraDe(comprasPorCliente(), c);
+  var m = modal('Excluir cliente',
+    '<p style="margin-top:0">Tem certeza que deseja excluir o cliente <b>' + esc(c.nome) + '</b>?</p>' +
+    '<div class="kv"><span>CNPJ/CPF</span><span>' + esc(fmtDoc(c.doc) || '—') + '</span><span>Cidade</span><span>' + esc([c.cidade, c.uf].filter(Boolean).join('/') || '—') + '</span><span>Pedidos</span><span>' + cp.n + '</span></div>' +
+    '<p class="muted" style="font-size:13px">Esta ação não pode ser desfeita: o cadastro some do programa para todos os vendedores. Os pedidos já feitos por este cliente continuam na lista de pedidos.</p>' +
+    '<div class="row" style="gap:8px;margin-top:12px"><button class="btn grow" data-nao>Cancelar</button><button class="btn grow btn-del" data-sim>Sim, excluir cliente</button></div>');
+  m.body.querySelector('[data-nao]').onclick = function(){ m.ov.querySelector('[data-x]').click(); };
+  m.body.querySelector('[data-sim]').onclick = function(){
+    var b = this; b.disabled = true; b.textContent = 'Excluindo…';
+    excluirCliente(id).then(function(){
+      m.ov.querySelector('[data-x]').click(); toast('Cliente ' + c.nome + ' excluído.'); telaClientes(arg);
+    }, function(e){ b.disabled = false; b.textContent = 'Sim, excluir cliente'; toast(String(e.message || e).slice(0, 200), 7000); });
+  };
+}
+function excluirCliente(id){
+  var c = S.clientes.find(function(x){ return x.id === id; });
+  var soLocal = !!(c && c._novo && S.cfila.indexOf(id) > -1);
+  var limpaLocal = function(){
+    S.cfila = S.cfila.filter(function(x){ return x !== id; });
+    S.clientes = S.clientes.filter(function(x){ return x.id !== id; });
+    S.clientes.forEach(function(x){ if (x.matriz_id === id) x.matriz_id = null; });
+    return salvarLocal();
+  };
+  if (soLocal) return limpaLocal();
+  if (!navigator.onLine) return Promise.reject(new Error('Sem internet: para excluir um cliente já enviado ao sistema, conecte-se à internet.'));
+  return api('clientes?matriz_id=eq.' + encodeURIComponent(id), { method:'PATCH', body: { matriz_id: null }, prefer:'return=minimal' }).catch(function(e){ if (e && e.auth) throw e; })
+    .then(function(){ return api('clientes?id=eq.' + encodeURIComponent(id), { method:'DELETE', prefer:'return=representation' }).catch(function(e){ if (/42501|permission denied/i.test(String(e && e.message))) throw new Error('Cliente NÃO excluído: o banco ainda não tem a permissão de exclusão de clientes. Fale com o administrador.'); throw e; }); })
+    .then(function(r){
+      if (!r || !r.length) throw new Error('O banco não permitiu excluir este cliente (falta a permissão de exclusão no banco). Fale com o administrador.');
+      return limpaLocal();
+    });
 }
 function abrirFiltroClientes(arg){
   var ufs = {}; S.clientes.forEach(function(c){ if (c.uf) ufs[c.uf] = 1; }); ufs = Object.keys(ufs).sort();
