@@ -1088,7 +1088,7 @@ function telaNovo(arg){
       id: uuid(), numero: 'CV-' + String(d.getFullYear()).slice(2) + p2(d.getMonth()+1) + p2(d.getDate()) + '-' + p2(d.getHours()) + p2(d.getMinutes()) + Math.floor(Math.random()*90+10),
       origem: 'app', grupo: gsel, marca: g.nome, politica: g.politicas.find(function(x){ return x.id === pid; }).nome, vendedor_codigo: vsel,
       cliente: c ? { name: c.nome, doc: c.doc || '', phone: c.telefone || '', city: c.cidade ? c.cidade + (c.uf ? '/' + c.uf : '') : '', carrier: c.transportadora || '' } : { name: nome },
-      itens: [], total: 0, prazo: '', obs: '', status: 'recebido', original: null
+      itens: [], total: 0, prazo: '', obs: '', status: 'espelho_enviado', original: null
     } };
     S.pedidos[ED.p.id] = undefined; delete S.pedidos[ED.p.id];
     telaEditor(); window.scrollTo(0,0);
