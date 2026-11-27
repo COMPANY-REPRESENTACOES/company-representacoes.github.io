@@ -5,8 +5,8 @@ var CFG = window.CV_CONFIG;
 var $app = document.getElementById('app');
 
 var STATUS = [
-  ['recebido','Recebido'],['espelho_enviado','Espelho enviado'],
-  ['enviado_fabrica','Enviado à fábrica'],['faturado','Faturado'],['cancelado','Cancelado']
+  ['recebido','Recebido'],['espelho_enviado','Em Aprovação'],
+  ['enviado_fabrica','Enviado P/ Faturamento'],['faturado','Faturado'],['cancelado','Cancelado']
 ];
 var STATUS_ANTIGOS = [['em_revisao','Em revisão'],['aprovado','Aprovado']]; /* não usados mais; só para pedidos antigos */
 var STATUS_NOME = {}; STATUS.concat(STATUS_ANTIGOS).forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
@@ -1477,7 +1477,7 @@ function gerarEspelho(p){
     toast('PDF do espelho salvo em Downloads.');
   }
   if (p.status === 'recebido' || p.status === 'em_revisao'){
-    if (confirm('Marcar o pedido como “Espelho enviado” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
+    if (confirm('Marcar o pedido como “Em Aprovação” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
   }
 }
 
@@ -1503,7 +1503,7 @@ function enviarWhatsApp(p){
     }, 1500);
   }
   if (p.status === 'recebido' || p.status === 'em_revisao'){
-    if (confirm('Marcar o pedido como “Espelho enviado” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
+    if (confirm('Marcar o pedido como “Em Aprovação” e salvar?')){ ED.p.status = 'espelho_enviado'; salvarPedido(); }
   }
 }
 
@@ -1573,7 +1573,7 @@ function telaEmail(p){
         if (ruins.length) alert('Enviado para ' + ok.length + ' de ' + rs.length + '.\nNão foi para: ' + ruins.map(function(x){ return x.destinatario + ' (' + String(x.erro||'').slice(0,80) + ')'; }).join('\n'));
         else toast('✓ E-mail enviado para ' + ok.length + ' destinatário' + (ok.length > 1 ? 's' : '') + '. Acompanhe a leitura na aba E-mails.', 5000);
         sincronizar();
-        if (ok.length && !jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado à fábrica” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
+        if (ok.length && !jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado P/ Faturamento” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
         if (novo) setTimeout(function(){ location.hash = '#novo'; }, 300);
       }, function(err){
         bt.disabled = bt2.disabled = false; bt.textContent = '✉ Enviar';
@@ -1597,7 +1597,7 @@ function telaEmail(p){
       toast('E-mail aberto com destinatários e assunto. Anexe o PDF ' + r.nome + ' (pasta Downloads) e clique em Enviar.', 8000);
     }
     m.ov.remove(); document.body.style.overflow = '';
-    if (!jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado à fábrica” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
+    if (!jaEnviado(p) && p.status !== 'cancelado' && confirm('Marcar o pedido como “Enviado P/ Faturamento” e salvar?')){ ED.p.status = 'enviado_fabrica'; salvarPedido(); }
     if (novo) setTimeout(function(){ location.hash = '#novo'; }, 300);
   }
   el('mEnv').onclick = function(){ enviar(false); };
