@@ -5,7 +5,7 @@ var CFG = window.CV_CONFIG;
 var $app = document.getElementById('app');
 
 var STATUS = [
-  ['recebido','Recebido'],['espelho_enviado','Em Aprovação'],
+  ['recebido','Recebido'],['espelho_enviado','Em Aprovação'],['nao_aprovado','Não Aprovado Pendência'],
   ['enviado_fabrica','Enviado P/ Faturamento'],['faturado','Faturado'],['cancelado','Cancelado']
 ];
 var STATUS_ANTIGOS = [['em_revisao','Em revisão'],['aprovado','Aprovado']]; /* não usados mais; só para pedidos antigos */
