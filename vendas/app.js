@@ -735,7 +735,7 @@ function telaPedidos(){
   });
   function cnt(fn){ return todos.filter(fn).length; }
   var chipsSt = [['','Todos']].concat(STATUS).map(function(s){
-    return '<button class="chip" data-st="' + s[0] + '" aria-pressed="' + (f.st === s[0]) + '">' + s[1] + '</button>';
+    return '<button class="chip' + (s[0] ? ' cst cst-' + s[0] : '') + '" data-st="' + s[0] + '" aria-pressed="' + (f.st === s[0]) + '">' + s[1] + '</button>';
   }).join('');
   var chipsOrg = [['','Todas as origens'],['express','Pedido Express'],['app','Lançados no app']].map(function(s){
     return '<button class="chip" data-org="' + s[0] + '" aria-pressed="' + (f.org === s[0]) + '">' + s[1] + '</button>';

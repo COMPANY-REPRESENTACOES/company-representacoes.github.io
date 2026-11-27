@@ -93,7 +93,7 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .dz-rank{display:flex;flex-direction:column;gap:12px}.dz-ri{display:flex;gap:10px;align-items:center}.dz-ri img,.dz-ri em{width:42px;height:42px;border-radius:12px;object-fit:contain;background:#faf9f6;border:1px solid #ece9e2;flex:none}.dz-ri em{display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;color:#b8821e}
 .dz-rb{flex:1;min-width:0}.dz-rl{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;margin-bottom:4px}.dz-rl span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dz-rb small{color:var(--muted);font-size:11.5px}
 .dz-fun{display:flex;flex-direction:column;gap:10px}.dz-fun>div{display:grid;grid-template-columns:120px 1fr 28px;gap:8px;align-items:center;font-size:13px}.dz-fun b{text-align:right}
-.dz-fun .fs-recebido i{background:#9aa4b2}.dz-fun .fs-espelho_enviado i{background:#2a78d6}.dz-fun .fs-enviado_fabrica i{background:#d9a93a}.dz-fun .fs-em_carteira i{background:#7a4fc9}.dz-fun .fs-faturado i{background:#1baf7a}.dz-fun .fs-nao_aprovado i{background:#e0702a}
+.dz-fun .fs-recebido i{background:#9aa4b2}.dz-fun .fs-espelho_enviado i{background:#e3b400}.dz-fun .fs-enviado_fabrica i{background:#2fa85a}.dz-fun .fs-em_carteira i{background:#2a64d6}.dz-fun .fs-faturado i{background:#1baf7a}.dz-fun .fs-nao_aprovado i{background:#d92d20}
 .dz-cli{margin:0;padding:0;list-style:none;counter-reset:c;display:flex;flex-direction:column;gap:10px}.dz-cli li{counter-increment:c;display:grid;grid-template-columns:22px 1fr auto;gap:4px 8px;align-items:center;font-size:13.5px}.dz-cli li:before{content:counter(c);font-weight:800;color:#b8821e;font-size:12px}.dz-cli span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dz-cli .dz-bar{grid-column:2/4}
 .dz-vend{display:flex;flex-direction:column;gap:12px}.dz-vend>div{display:flex;align-items:center;gap:10px}.dz-vend em{width:38px;height:38px;border-radius:50%;background:#1b1b1d;color:#f2c14e;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:800}.dz-vend>div>div{flex:1}.dz-vend b{display:block;font-size:14px}.dz-vend span{font-size:12.5px;color:var(--muted)}.dz-vend strong{font-size:18px}
 .dz-empty{color:var(--muted);text-align:center;padding:36px 8px;font-size:13.5px}.dz-nota{color:var(--muted);font-size:12px;margin-top:12px}
@@ -156,10 +156,10 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .badge{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:800;letter-spacing:.02em;background:var(--chip);color:var(--text);white-space:nowrap}
 .st-recebido{background:#fde8c8;color:#7a4a00}
 .st-em_revisao{background:#e2ecfb;color:#163e75}
-.st-espelho_enviado{background:#efe3fb;color:#5a2a86}
+.st-espelho_enviado{background:#fff1b8;color:#7a5a00}
 .st-aprovado{background:#dbf3e4;color:#0f5a2c}
-.st-enviado_fabrica{background:#d7f0f4;color:#0b5560}
-.st-em_carteira{background:#ece3fb;color:#4b2a8c}
+.st-enviado_fabrica{background:#d6f5df;color:#146c33}
+.st-em_carteira{background:#dbe8ff;color:#1747a6}
 .st-faturado{background:#1f8a4c;color:#fff}
 .st-cancelado{background:#fbe0e0;color:#8f1b1b}
 .aprov-pill{border:1.5px solid #d92d20;background:#d92d20;color:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;animation:apPisca 1.2s ease-in-out infinite}
@@ -171,7 +171,9 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .b-dias{background:#f1f1f3;color:#555}.b-dias.on{background:#d92d20;color:#fff}
 .b-adia{padding:3px 10px!important;font-size:12px!important}
 .aprov-it{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}.aprov-it .grow{flex:1;min-width:180px}.aprov-d{color:#b42318;font-weight:700;font-size:13px;margin-top:2px}.aprov-bt{display:flex;gap:6px;flex-wrap:wrap}
-.st-nao_aprovado{background:#ffe1cc;color:#9a3d00}
+.st-nao_aprovado{background:#fde0de;color:#b42318}
+.chip.cst:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;background:var(--cd)}.chip.cst-espelho_enviado{--cd:#e3b400}.chip.cst-nao_aprovado{--cd:#d92d20}.chip.cst-enviado_fabrica{--cd:#2fa85a}.chip.cst-em_carteira{--cd:#2a64d6}.chip.cst-faturado{--cd:#1f8a4c}.chip.cst-cancelado{--cd:#8f1b1b}.chip.cst-recebido{--cd:#9aa4b2}
+.chip.cst-espelho_enviado[aria-pressed=true]{background:#fff1b8!important;color:#7a5a00!important}.chip.cst-nao_aprovado[aria-pressed=true]{background:#fde0de!important;color:#b42318!important}.chip.cst-enviado_fabrica[aria-pressed=true]{background:#d6f5df!important;color:#146c33!important}.chip.cst-em_carteira[aria-pressed=true]{background:#dbe8ff!important;color:#1747a6!important}
 .b-express{background:#fff3cd;color:#7a5a00;border:1px solid #f0d27a}
 .b-pend{background:#fde8c8;color:#7a4a00}
 .empty{padding:28px;text-align:center;color:var(--muted)}
@@ -393,6 +395,6 @@ table.tb th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-sp
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261127g"></script>
+<script src="app.js?v=20261127h"></script>
 </body>
 </html>
