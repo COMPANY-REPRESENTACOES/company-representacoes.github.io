@@ -538,27 +538,53 @@ var APROV_DIAS = 2;
 S.aprovEm = lsGet('cv_aprov_em', {});
 function aprovInicio(p){ return S.aprovEm[p.id] || p.atualizado_em || p.criado_em; }
 function aprovDias(p){ var t = new Date(aprovInicio(p)).getTime(); return t ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : 0; }
-function aprovOk(){ return lsGet('cv_aprov_ok', {}); }
+function aprovOk(){ return lsGet('cv_aprov_ate', {}); }
 function meuPedido(p){ var meu = S.perfil && S.perfil.codigo; return p.vendedor_codigo ? p.vendedor_codigo === meu : souAdmin(); }
 function emAlertaAprov(p){
   if (p.status !== 'espelho_enviado' || !meuPedido(p)) return false;
-  var ciclo = Math.floor(aprovDias(p) / APROV_DIAS); if (ciclo < 1) return false;
-  return (aprovOk()[p.id] || 0) < ciclo;
+  if (aprovDias(p) < APROV_DIAS) return false;
+  var ate = aprovOk()[p.id];
+  return !ate || Date.now() >= new Date(ate).getTime();
 }
 function aprovAlertas(){ return listaPedidos().filter(emAlertaAprov); }
-function aprovAdiar(ids){ var ok = aprovOk(); ids.forEach(function(id){ var p = S.pedidos[id]; if (p) ok[id] = Math.floor(aprovDias(p) / APROV_DIAS); }); lsSet('cv_aprov_ok', ok); }
+/* "Lembrar em 2 dias": esconde até o próximo ciclo de 2 dias e grava no banco (vale em todos os aparelhos) */
+function aprovAdiar(ids){
+  var ok = aprovOk(), pend = lsGet('cv_aprov_pend', {});
+  ids.forEach(function(id){
+    var p = S.pedidos[id]; if (!p) return;
+    var ciclo = Math.floor(aprovDias(p) / APROV_DIAS);
+    var ate = new Date(new Date(aprovInicio(p)).getTime() + (ciclo + 1) * APROV_DIAS * 86400000).toISOString();
+    ok[id] = ate; pend[id] = ate;
+  });
+  lsSet('cv_aprov_ate', ok); lsSet('cv_aprov_pend', pend);
+  enviarAprovPend();
+}
+function enviarAprovPend(){
+  var pend = lsGet('cv_aprov_pend', {}), ids = Object.keys(pend);
+  if (!ids.length || !navigator.onLine || !S.sess) return Promise.resolve();
+  var quem = (S.perfil && (CFG.vendedores[S.perfil.codigo] || S.perfil.nome)) || null;
+  var rows = ids.map(function(id){ return { pedido_id: id, ate: pend[id], usuario: quem, atualizado_em: new Date().toISOString() }; });
+  return api('aprov_alertas', { method:'POST', body: rows, prefer:'resolution=merge-duplicates,return=minimal' }).then(function(){
+    var p2 = lsGet('cv_aprov_pend', {}); ids.forEach(function(id){ if (p2[id] === pend[id]) delete p2[id]; }); lsSet('cv_aprov_pend', p2);
+  }, function(e){ if (e && e.auth) throw e; });
+}
 function diasTxt(n){ return n === 0 ? 'hoje' : n === 1 ? 'há 1 dia' : 'há ' + n + ' dias'; }
 /* data em que cada pedido entrou em Em Aprovação (pelo histórico do banco) */
 function carregarAprovEm(){
   var ids = listaPedidos().filter(function(p){ return p.status === 'espelho_enviado'; }).map(function(p){ return p.id; });
   if (!ids.length) return Promise.resolve();
-  return api('pedido_historico?select=pedido_id,quando,antes,depois&pedido_id=in.(' + ids.join(',') + ')&order=quando.asc&limit=5000').then(function(r){
+  var lembr = enviarAprovPend().then(function(){ return api('aprov_alertas?select=pedido_id,ate&pedido_id=in.(' + ids.join(',') + ')'); }).then(function(r){
+    var ok = aprovOk();
+    (r || []).forEach(function(a){ if (!ok[a.pedido_id] || new Date(a.ate) > new Date(ok[a.pedido_id])) ok[a.pedido_id] = a.ate; });
+    lsSet('cv_aprov_ate', ok);
+  }, function(e){ if (e && e.auth) throw e; });
+  return lembr.then(function(){ return api('pedido_historico?select=pedido_id,quando,antes,depois&pedido_id=in.(' + ids.join(',') + ')&order=quando.asc&limit=5000').then(function(r){
     var m = {};
     (r || []).forEach(function(h){ var a = h.antes && h.antes.status, d = h.depois && h.depois.status; if (d === 'espelho_enviado' && a !== 'espelho_enviado') m[h.pedido_id] = h.quando; });
     ids.forEach(function(id){ if (m[id]) S.aprovEm[id] = m[id]; });
     Object.keys(S.aprovEm).forEach(function(id){ if (!S.pedidos[id] || S.pedidos[id].status !== 'espelho_enviado') delete S.aprovEm[id]; });
     lsSet('cv_aprov_em', S.aprovEm);
-  }, function(e){ if (e && e.auth) throw e; });
+  }, function(e){ if (e && e.auth) throw e; }); });
 }
 function verAlertasAprov(){
   var l = aprovAlertas();
@@ -901,7 +927,7 @@ function salvarPedido(){
   var tipo = ED.novo ? 'inserir' : 'editar';
   if (!ED.novo && S.fila.some(function(o){ return o.id === p.id && o.tipo === 'inserir'; })) tipo = 'inserir';
   var antSt = S.pedidos[p.id] && S.pedidos[p.id].status;
-  if (p.status === 'espelho_enviado' && antSt !== 'espelho_enviado'){ S.aprovEm[p.id] = p.atualizado_em; lsSet('cv_aprov_em', S.aprovEm); var ok0 = aprovOk(); delete ok0[p.id]; lsSet('cv_aprov_ok', ok0); }
+  if (p.status === 'espelho_enviado' && antSt !== 'espelho_enviado'){ S.aprovEm[p.id] = p.atualizado_em; lsSet('cv_aprov_em', S.aprovEm); var ok0 = aprovOk(); delete ok0[p.id]; lsSet('cv_aprov_ate', ok0); }
   S.pedidos[p.id] = JSON.parse(JSON.stringify(p));
   var id = p.id; ED = null;
   enfileirar(id, tipo).then(function(){ toast(navigator.onLine ? 'Pedido salvo.' : 'Pedido salvo no aparelho. Sobe quando a internet voltar.'); });
