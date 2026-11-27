@@ -6,7 +6,7 @@ var $app = document.getElementById('app');
 
 var STATUS = [
   ['recebido','Recebido'],['espelho_enviado','Em Aprovação'],['nao_aprovado','Não Aprovado Pendência'],
-  ['enviado_fabrica','Enviado P/ Faturamento'],['faturado','Faturado'],['cancelado','Cancelado']
+  ['enviado_fabrica','Enviado P/ Faturamento'],['em_carteira','Pedido em Carteira'],['faturado','Faturado'],['cancelado','Cancelado']
 ];
 var STATUS_ANTIGOS = [['em_revisao','Em revisão'],['aprovado','Aprovado']]; /* não usados mais; só para pedidos antigos */
 var STATUS_NOME = {}; STATUS.concat(STATUS_ANTIGOS).forEach(function(s){ STATUS_NOME[s[0]] = s[1]; });
@@ -1591,7 +1591,7 @@ function clienteDoPedido(p){
   var c = p.cliente || {}, d = soNum(c.doc);
   return S.clientes.find(function(x){ return (d && soNum(x.doc) === d) || (c.name && x.nome === c.name); }) || null;
 }
-function jaEnviado(p){ return p.status === 'enviado_fabrica' || p.status === 'faturado'; }
+function jaEnviado(p){ return p.status === 'enviado_fabrica' || p.status === 'em_carteira' || p.status === 'faturado'; }
 function emailsLista(t){ return String(t||'').split(/[,;\s]+/).map(function(x){ return x.trim(); }).filter(Boolean); }
 function telaEmail(p){
   var c = p.cliente || {}, cad = clienteDoPedido(p), g = grupo(p.grupo);
