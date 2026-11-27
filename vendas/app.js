@@ -479,7 +479,7 @@ function sincronizar(manual){
     S.clientes = cl;
     if (res[5]){ S.reps = res[5]; kvSet('representadas', S.reps); }
     S.lastSync = new Date().toISOString(); lsSet('cv_lastsync', S.lastSync);
-    return salvarLocal();
+    return carregarAprovEm().then(salvarLocal);
   }).catch(function(e){
     S.syncErr = (e && e.auth) ? e.message : 'Não foi possível sincronizar agora (' + String(e && e.message || e).slice(0,120) + ')';
     if (e && e.auth){ S.sess = null; lsSet('cv_sess', null); }
@@ -533,6 +533,50 @@ function souAdmin(){ return S.perfil && S.perfil.papel === 'admin'; }
 
 /* ---------- topo / navegação ---------- */
 function rota(){ var h = location.hash.replace(/^#\/?/, ''); var p = h.split('/'); return { nome: p[0] || 'desempenho', arg: p.slice(1).join('/') }; }
+/* ---------- alerta de pedidos Em Aprovação (a cada 2 dias, para quem lançou o pedido) ---------- */
+var APROV_DIAS = 2;
+S.aprovEm = lsGet('cv_aprov_em', {});
+function aprovInicio(p){ return S.aprovEm[p.id] || p.atualizado_em || p.criado_em; }
+function aprovDias(p){ var t = new Date(aprovInicio(p)).getTime(); return t ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : 0; }
+function aprovOk(){ return lsGet('cv_aprov_ok', {}); }
+function meuPedido(p){ var meu = S.perfil && S.perfil.codigo; return p.vendedor_codigo ? p.vendedor_codigo === meu : souAdmin(); }
+function emAlertaAprov(p){
+  if (p.status !== 'espelho_enviado' || !meuPedido(p)) return false;
+  var ciclo = Math.floor(aprovDias(p) / APROV_DIAS); if (ciclo < 1) return false;
+  return (aprovOk()[p.id] || 0) < ciclo;
+}
+function aprovAlertas(){ return listaPedidos().filter(emAlertaAprov); }
+function aprovAdiar(ids){ var ok = aprovOk(); ids.forEach(function(id){ var p = S.pedidos[id]; if (p) ok[id] = Math.floor(aprovDias(p) / APROV_DIAS); }); lsSet('cv_aprov_ok', ok); }
+function diasTxt(n){ return n === 0 ? 'hoje' : n === 1 ? 'há 1 dia' : 'há ' + n + ' dias'; }
+/* data em que cada pedido entrou em Em Aprovação (pelo histórico do banco) */
+function carregarAprovEm(){
+  var ids = listaPedidos().filter(function(p){ return p.status === 'espelho_enviado'; }).map(function(p){ return p.id; });
+  if (!ids.length) return Promise.resolve();
+  return api('pedido_historico?select=pedido_id,quando,antes,depois&pedido_id=in.(' + ids.join(',') + ')&order=quando.asc&limit=5000').then(function(r){
+    var m = {};
+    (r || []).forEach(function(h){ var a = h.antes && h.antes.status, d = h.depois && h.depois.status; if (d === 'espelho_enviado' && a !== 'espelho_enviado') m[h.pedido_id] = h.quando; });
+    ids.forEach(function(id){ if (m[id]) S.aprovEm[id] = m[id]; });
+    Object.keys(S.aprovEm).forEach(function(id){ if (!S.pedidos[id] || S.pedidos[id].status !== 'espelho_enviado') delete S.aprovEm[id]; });
+    lsSet('cv_aprov_em', S.aprovEm);
+  }, function(e){ if (e && e.auth) throw e; });
+}
+function verAlertasAprov(){
+  var l = aprovAlertas();
+  var m = modal('Pedidos ainda Em Aprovação', '');
+  function desenha(){
+    l = aprovAlertas();
+    m.body.innerHTML = l.length ? '<p class="muted" style="margin-top:0">Estes pedidos continuam Em Aprovação. Dê andamento e mude o status, ou toque em “Lembrar em 2 dias”.</p>' + l.map(function(p){
+      var c = p.cliente || {};
+      return '<div class="aprov-it"><div class="grow"><b>' + esc(c.name || 'Cliente sem nome') + '</b><div class="muted">' + esc(p.numero) + ' · ' + esc(p.marca || '') + ' · ' + fmt(p.total) + '</div><div class="aprov-d">Em Aprovação ' + diasTxt(aprovDias(p)) + '</div></div>' +
+        '<div class="aprov-bt"><a class="btn sm pri" href="#pedido/' + p.id + '" data-abrir>Abrir pedido</a><button class="btn sm" data-adia="' + esc(p.id) + '">Lembrar em 2 dias</button></div></div>';
+    }).join('') + (l.length > 1 ? '<button class="btn" style="width:100%;margin-top:12px" data-todos>Lembrar todos em 2 dias</button>' : '') : '<div class="empty">Nenhum pedido pendente de aprovação agora.</div>';
+    m.body.querySelectorAll('[data-abrir]').forEach(function(a){ a.onclick = function(){ m.ov.querySelector('[data-x]').click(); }; });
+    m.body.querySelectorAll('[data-adia]').forEach(function(b){ b.onclick = function(){ aprovAdiar([b.dataset.adia]); desenha(); }; });
+    var t = m.body.querySelector('[data-todos]'); if (t) t.onclick = function(){ aprovAdiar(l.map(function(p){ return p.id; })); desenha(); };
+  }
+  m.onclose = function(){ render(); };
+  desenha();
+}
 function topo(){
   var el = document.getElementById('syncPill'); if (!el) return;
   var n = S.fila.length + S.cfila.length, on = navigator.onLine;
@@ -542,17 +586,18 @@ function topo(){
 }
 function casca(conteudo, acoes){
   var r = rota().nome;
-  var nAl = emailsAlerta().length;
-  var tabs = [['desempenho','Desempenho'],['pedidos','Pedidos'],['novo','Novo pedido'],['clientes','Clientes'],['produtos','Produtos'],['representadas','Representadas'],['transportadoras','Transportadoras'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
+  var nAl = emailsAlerta().length, nAp = aprovAlertas().length;
+  var tabs = [['desempenho','Desempenho'],['pedidos','Pedidos' + (nAp ? ' <span class="tab-al" title="Pedidos Em Aprovação aguardando andamento">' + nAp + '</span>' : '')],['novo','Novo pedido'],['clientes','Clientes'],['produtos','Produtos'],['representadas','Representadas'],['transportadoras','Transportadoras'],['emails','E-mails' + (nAl ? ' <span class="tab-al" title="E-mails sem leitura há mais de 2 dias">' + nAl + '</span>' : '')],['mais','Mais']];
   $app.innerHTML =
     '<header class="top"><div class="wrap"><div class="top-row"><img src="company.png" alt="Company">' +
       '<div class="top-title">Company Vendas<small>' + esc(S.perfil ? S.perfil.nome : '') + (souAdmin() ? ' · administrador' : '') + '</small></div>' +
-      '<button class="sync" id="syncPill" type="button"></button></div>' +
+      (nAp ? '<button class="aprov-pill" id="aprovPill" type="button" title="Pedidos Em Aprovação há 2 dias ou mais">🔔 ' + nAp + ' em aprovação</button>' : '') + '<button class="sync" id="syncPill" type="button"></button></div>' +
       '<nav class="tabs">' + tabs.map(function(t){ return '<a href="#' + t[0] + '" class="' + (r === t[0] || (r==='pedido' && t[0]==='pedidos') || (r==='cliente' && t[0]==='clientes') || (r==='representada' && t[0]==='representadas') ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</nav>' +
     '</div></header><main><div class="wrap">' +
     (S.syncErr ? '<div class="note bad">' + esc(S.syncErr) + '</div>' : '') +
     conteudo + '</div></main>' + (acoes ? '<div class="actions"><div class="wrap">' + acoes + '</div></div>' : '');
   document.getElementById('syncPill').onclick = function(){ sincronizar(true); };
+  var ap = document.getElementById('aprovPill'); if (ap) ap.onclick = verAlertasAprov;
   topo();
 }
 
@@ -671,7 +716,8 @@ function telaPedidos(){
   }).join('') + (souAdmin() ? '</div><div class="chips">' + [['','Todos vendedores']].concat(Object.keys(CFG.vendedores).map(function(k){ return [k, CFG.vendedores[k]]; })).map(function(s){
     return '<button class="chip" data-vend="' + s[0] + '" aria-pressed="' + (f.vend === s[0]) + '">' + s[1] + '</button>';
   }).join('') : '');
-  var html = '<div class="row"><h1 class="grow">Pedidos</h1><a class="btn pri" href="#novo">+ Novo pedido</a></div>' +
+  var nAp = aprovAlertas().length;
+  var html = (nAp ? '<button type="button" class="aprov-bar" id="aprovBar">🔔 ' + (nAp === 1 ? '1 pedido seu continua' : nAp + ' pedidos seus continuam') + ' Em Aprovação há 2 dias ou mais. Toque para ver e dar andamento.</button>' : '') + '<div class="row"><h1 class="grow">Pedidos</h1><a class="btn pri" href="#novo">+ Novo pedido</a></div>' +
     '<input class="in" id="qBusca" placeholder="Buscar por cliente, CNPJ, cidade ou nº do pedido" value="' + esc(f.q) + '">' +
     '<div class="chips" style="margin-top:10px">' + chipsSt + '</div><div class="chips-row"><div class="chips">' + chipsOrg + '</div></div>' +
     '<div class="list">' + (lista.length ? lista.map(cardPedido).join('') : '<div class="card empty">' + (todos.length ? 'Nenhum pedido com esse filtro.' : (S.lastSync ? 'Nenhum pedido ainda.' : 'Sincronizando os pedidos…')) + '</div>') + '</div>';
@@ -681,14 +727,19 @@ function telaPedidos(){
   $app.querySelectorAll('[data-org]').forEach(function(b){ b.onclick = function(){ S.filtro.org = b.dataset.org; telaPedidos(); }; });
   $app.querySelectorAll('[data-vend]').forEach(function(b){ b.onclick = function(){ S.filtro.vend = b.dataset.vend; telaPedidos(); }; });
   $app.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(e){ e.preventDefault(); e.stopPropagation(); confirmarExcluir(b.dataset.del); }; });
+  $app.querySelectorAll('[data-adia]').forEach(function(b){ b.onclick = function(e){ e.preventDefault(); e.stopPropagation(); aprovAdiar([b.dataset.adia]); toast('Ok, vamos lembrar de novo em 2 dias.'); telaPedidos(); }; });
+  var ab = document.getElementById('aprovBar'); if (ab) ab.onclick = verAlertasAprov;
 }
 function cardPedido(p){
   var c = p.cliente || {};
-  return '<a class="card ped" href="#pedido/' + p.id + '">' +
+  var al = emAlertaAprov(p);
+  return '<a class="card ped' + (al ? ' aprov-al' : '') + '" href="#pedido/' + p.id + '">' +
     '<div><b>' + esc(c.name || 'Cliente sem nome') + '</b></div><div class="tot">' + fmt(p.total) + '</div>' +
     '<div class="meta">' + esc(p.numero) + ' · ' + esc(p.marca) + ' · ' + esc(politicaNome(p.grupo, p.politica)) + (c.city ? ' · ' + esc(c.city) : '') + '</div>' +
     '<div class="meta" style="text-align:right">' + dataBR(p.criado_em) + '</div>' +
     '<div class="row" style="gap:6px">' + '<span class="badge st-' + p.status + '">' + esc(STATUS_NOME[p.status] || p.status) + '</span>' +
+      (p.status === 'espelho_enviado' ? '<span class="badge b-dias' + (al ? ' on' : '') + '">' + (al ? '🔔 ' : '') + diasTxt(aprovDias(p)) + '</span>' : '') +
+      (al ? '<button type="button" class="btn sm b-adia" data-adia="' + esc(p.id) + '">Lembrar em 2 dias</button>' : '') +
       (p.origem === 'express' ? '<span class="badge b-express">Pedido Express</span>' : '') +
       (souAdmin() ? '<span class="badge">' + esc(CFG.vendedores[p.vendedor_codigo] || p.vendedor_codigo) + '</span>' : '') +
       (pendentes(p.id) ? '<span class="badge b-pend">⟳ aguardando envio</span>' : '') + '</div>' +
@@ -849,6 +900,8 @@ function salvarPedido(){
   if (ED.novo) p.criado_em = p.atualizado_em;
   var tipo = ED.novo ? 'inserir' : 'editar';
   if (!ED.novo && S.fila.some(function(o){ return o.id === p.id && o.tipo === 'inserir'; })) tipo = 'inserir';
+  var antSt = S.pedidos[p.id] && S.pedidos[p.id].status;
+  if (p.status === 'espelho_enviado' && antSt !== 'espelho_enviado'){ S.aprovEm[p.id] = p.atualizado_em; lsSet('cv_aprov_em', S.aprovEm); var ok0 = aprovOk(); delete ok0[p.id]; lsSet('cv_aprov_ok', ok0); }
   S.pedidos[p.id] = JSON.parse(JSON.stringify(p));
   var id = p.id; ED = null;
   enfileirar(id, tipo).then(function(){ toast(navigator.onLine ? 'Pedido salvo.' : 'Pedido salvo no aparelho. Sobe quando a internet voltar.'); });

@@ -161,6 +161,15 @@ label.lb{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:
 .st-enviado_fabrica{background:#d7f0f4;color:#0b5560}
 .st-faturado{background:#1f8a4c;color:#fff}
 .st-cancelado{background:#fbe0e0;color:#8f1b1b}
+.aprov-pill{border:1.5px solid #d92d20;background:#d92d20;color:#fff;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:800;cursor:pointer;margin-right:8px;white-space:nowrap;animation:apPisca 1.2s ease-in-out infinite}
+@keyframes apPisca{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(217,45,32,.6)}50%{opacity:.55;box-shadow:0 0 0 6px rgba(217,45,32,0)}}
+.aprov-bar{display:block;width:100%;text-align:left;border:1.5px solid #d92d20;background:#fdecea;color:#8f1b1b;border-radius:12px;padding:12px 14px;font-weight:700;font-size:14px;margin-bottom:14px;cursor:pointer;animation:apBorda 1.2s ease-in-out infinite}
+@keyframes apBorda{0%,100%{border-color:#d92d20}50%{border-color:#f5b4ae}}
+.card.ped.aprov-al{border:2px solid #d92d20!important;animation:apCard 1.2s ease-in-out infinite}
+@keyframes apCard{0%,100%{box-shadow:0 0 0 0 rgba(217,45,32,.45)}50%{box-shadow:0 0 0 5px rgba(217,45,32,.12)}}
+.b-dias{background:#f1f1f3;color:#555}.b-dias.on{background:#d92d20;color:#fff}
+.b-adia{padding:3px 10px!important;font-size:12px!important}
+.aprov-it{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}.aprov-it .grow{flex:1;min-width:180px}.aprov-d{color:#b42318;font-weight:700;font-size:13px;margin-top:2px}.aprov-bt{display:flex;gap:6px;flex-wrap:wrap}
 .st-nao_aprovado{background:#ffe1cc;color:#9a3d00}
 .b-express{background:#fff3cd;color:#7a5a00;border:1px solid #f0d27a}
 .b-pend{background:#fde8c8;color:#7a4a00}
@@ -381,6 +390,6 @@ table.tb th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-sp
 <div id="app"></div>
 <script src="config.js"></script>
 <script src="pdflib.js"></script>
-<script src="app.js?v=20261127b"></script>
+<script src="app.js?v=20261127c"></script>
 </body>
 </html>
